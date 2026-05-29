@@ -11,7 +11,6 @@ export default function EditorPanel() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [_editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState('');
-  const [showSiteList, setShowSiteList] = useState(true);
   const [showNoteList, setShowNoteList] = useState(true);
   const [actualCurrentSite, setActualCurrentSite] = useState<string | null>(null);
 
@@ -176,11 +175,11 @@ export default function EditorPanel() {
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowSiteList(!showSiteList)}
+            onClick={() => setShowNoteList(!showNoteList)}
             className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded"
-            title={showSiteList ? '隐藏网站列表' : '显示网站列表'}
+            title={showNoteList ? '隐藏笔记列表' : '显示笔记列表'}
           >
-            {showSiteList ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            {showNoteList ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
           <h2 className="text-lg font-semibold">{currentSite}</h2>
           <span className="text-xs px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-full text-zinc-500">
@@ -217,30 +216,13 @@ export default function EditorPanel() {
         </div>
       </div>
 
-      {/* Content Area - Three Column Layout */}
+      {/* Content Area - Two Column Layout (Note List + Editor) */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Site List - Collapsible */}
-        {showSiteList && (
-          <div className="w-48 border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto p-2 flex-shrink-0">
-            <div className="text-xs text-zinc-400 px-2 py-1 mb-1">网站列表</div>
-            {/* Site list would go here - simplified for now */}
-            <div className="text-sm text-zinc-500 px-2 py-1">
-              {currentSite}
-            </div>
-          </div>
-        )}
-
         {/* Note List - Collapsible */}
         {showNoteList && (
           <div className="w-64 border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto p-2 flex-shrink-0">
             <div className="flex items-center justify-between mb-2 px-1">
               <div className="text-xs text-zinc-400">笔记列表</div>
-              <button
-                onClick={() => setShowNoteList(false)}
-                className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded"
-              >
-                <ChevronLeft className="w-3 h-3" />
-              </button>
             </div>
             {siteNotes.length === 0 ? (
               <div className="p-4 text-center text-sm text-zinc-400">

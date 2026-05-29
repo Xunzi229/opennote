@@ -37,12 +37,6 @@ export default function NoteListPanel() {
   const siteNoteIds = useMemo(() => siteNotes.map((note) => note.id).join(','), [siteNotes]);
 
   useEffect(() => {
-    if (!currentSite && actualCurrentSite) {
-      setCurrentSite(actualCurrentSite);
-    }
-  }, [currentSite, actualCurrentSite, setCurrentSite]);
-
-  useEffect(() => {
     if (!activeSite) return;
 
     if (siteNotes.length === 0) {

@@ -1,7 +1,12 @@
 // OpenNote Background Service Worker
 
-// Register context menu on install
+function configureSidePanel() {
+  chrome.sidePanel.setOptions({ path: 'index.html' });
+}
+
+// Register context menu and side panel on install
 chrome.runtime.onInstalled.addListener(() => {
+  configureSidePanel();
   chrome.contextMenus.create({
     id: 'save-note',
     title: '保存为笔记',
@@ -51,7 +56,4 @@ chrome.action.onClicked.addListener(async (tab) => {
   }
 });
 
-// Set side panel options on startup
-chrome.runtime.onStartup.addListener(() => {
-  chrome.sidePanel.setOptions({ path: 'sidepanel.html' });
-});
+chrome.runtime.onStartup.addListener(configureSidePanel);

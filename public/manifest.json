@@ -3,7 +3,7 @@
   "name": "OpenNote",
   "version": "1.0.0",
   "description": "Website-specific notes in a right sidebar",
-  "permissions": ["storage", "contextMenus", "sidePanel", "activeTab", "tabs", "notifications"],
+  "permissions": ["storage", "contextMenus", "sidePanel", "activeTab", "tabs", "notifications", "favicon"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js",

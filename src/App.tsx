@@ -26,16 +26,7 @@ function App() {
             const result = await chrome.storage.session.get('pendingNoteContent');
             if (result.pendingNoteContent) {
               // Create a new note with the pending content
-              const pendingContent = {
-                type: 'doc',
-                content: [
-                  {
-                    type: 'paragraph',
-                    content: [{ type: 'text', text: result.pendingNoteContent }],
-                  },
-                ],
-              };
-              await addNote(url.hostname, pendingContent);
+              await addNote(url.hostname, result.pendingNoteContent);
               // Clear pending content
               await chrome.storage.session.remove('pendingNoteContent');
             }

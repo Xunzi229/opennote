@@ -5,14 +5,11 @@ import ConfirmDialog from './ConfirmDialog';
 import { Search, Plus, Trash2 } from 'lucide-react';
 
 export default function Sidebar() {
-  const { notes, searchQuery, setSearchQuery, currentSite, setCurrentSite, deleteSite } = useNotesStore();
+  const { notes, searchQuery, setSearchQuery, currentSite, setCurrentSite, deleteSite, filteredSites } = useNotesStore();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [siteToDelete, setSiteToDelete] = useState<string | null>(null);
 
-  const hostnames = Object.keys(notes).sort();
-  const filteredHostnames = hostnames.filter((h) =>
-    h.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredHostnames = filteredSites();
 
   const handleAddSite = () => {
     const hostname = prompt('输入网站域名（如 example.com）:');
@@ -61,7 +58,7 @@ export default function Sidebar() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
             <input
               type="text"
-              placeholder="搜索网站..."
+              placeholder="搜索网站或笔记..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 text-sm bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md focus:outline-none focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-600"

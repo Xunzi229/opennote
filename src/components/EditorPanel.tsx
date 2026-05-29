@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNotesStore } from '../store/notesStore';
 import type { Note } from '../types';
 import MarkdownEditor from './MarkdownEditor';
+import { isContentEmpty, contentPreview } from '../lib/markdownContent';
 import { FileText, Plus, Trash2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -9,23 +10,19 @@ export default function EditorPanel() {
   const { currentSite, addNote, updateNote, deleteNote, updateNoteTitle, filteredNotes, setCurrentSite } = useNotesStore();
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
-  const [_editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState('');
   const [showNoteList, setShowNoteList] = useState(true);
   const [actualCurrentSite, setActualCurrentSite] = useState<string | null>(null);
 
-  const siteNotes = currentSite ? filteredNotes(currentSite) : [];
+  const activeSite = currentSite ?? actualCurrentSite;
+  const siteNotes = activeSite ? filteredNotes(activeSite) : [];
   const selectedNote = siteNotes.find((n) => n.id === selectedNoteId) || null;
 
-  // Check if content is empty (no actual text)
-  const isContentEmpty = (content: any): boolean => {
-    const extractText = (node: any): string => {
-      if (node.type === 'text') return node.text || '';
-      if (node.content) return node.content.map(extractText).join('');
-      return '';
-    };
-    const text = extractText(content);
-    return text.trim().length === 0;
+  const ensureCurrentSite = (site: string) => {
+    if (!currentSite) {
+      setCurrentSite(site);
+    }
   };
 
   // Detect actual current tab and listen for tab changes
@@ -60,20 +57,20 @@ export default function EditorPanel() {
 
   // Auto-select first note or create new one when site changes
   useEffect(() => {
-    if (currentSite) {
+    if (activeSite) {
       if (siteNotes.length > 0) {
         setSelectedNoteId(siteNotes[0].id);
       } else {
         setSelectedNoteId(null);
       }
     }
-  }, [currentSite]);
+  }, [activeSite, siteNotes.length]);
 
   // Debounced auto-save
   const debouncedSave = useCallback(
     (() => {
       let timeout: ReturnType<typeof setTimeout>;
-      return (site: string, id: string, content: any) => {
+      return (site: string, id: string, content: string) => {
         clearTimeout(timeout);
         // Don't auto-save if content is empty
         if (isContentEmpty(content)) {
@@ -95,48 +92,38 @@ export default function EditorPanel() {
     [updateNote]
   );
 
-  const handleEditorUpdate = (content: any) => {
-    if (currentSite && selectedNote) {
-      // Only auto-save if content is not empty
+  const handleEditorUpdate = (content: string) => {
+    if (activeSite && selectedNote) {
       if (!isContentEmpty(content)) {
-        debouncedSave(currentSite, selectedNote.id, content);
+        debouncedSave(activeSite, selectedNote.id, content);
       }
     }
   };
 
   // Generate title from timestamp + first 10 non-whitespace chars of content
-  const generateTitle = (content: any): string => {
+  const generateTitle = (content: string): string => {
     const now = new Date();
     const timeStr = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
-    const extractText = (node: any): string => {
-      if (node.type === 'text') return node.text || '';
-      if (node.content) return node.content.map(extractText).join('');
-      return '';
-    };
-
-    const fullText = extractText(content);
-    const nonWhitespace = fullText.replace(/\s/g, '').slice(0, 10);
-
-    return nonWhitespace ? `${timeStr} ${nonWhitespace}` : `${timeStr} 新笔记`;
+    const preview = contentPreview(content, 10);
+    return preview ? `${timeStr} ${preview}` : `${timeStr} 新笔记`;
   };
 
   const handleCreateNote = async () => {
-    if (!currentSite) return;
+    if (!activeSite) return;
 
-    const emptyContent = { type: 'doc', content: [] };
+    ensureCurrentSite(activeSite);
+    const emptyContent = '';
     const title = generateTitle(emptyContent);
-    const newNote = await addNote(currentSite, emptyContent, title);
+    const newNote = await addNote(activeSite, emptyContent, title);
     setSelectedNoteId(newNote.id);
     toast.success('已创建新笔记');
   };
 
   const handleDeleteNote = async (noteId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!currentSite) return;
+    if (!activeSite) return;
 
-
-    await deleteNote(currentSite, noteId);
+    await deleteNote(activeSite, noteId);
     if (selectedNoteId === noteId) {
       const remaining = siteNotes.filter((n) => n.id !== noteId);
       setSelectedNoteId(remaining.length > 0 ? remaining[0].id : null);
@@ -156,13 +143,13 @@ export default function EditorPanel() {
   };
 
   const handleSaveTitle = async (noteId: string) => {
-    if (!currentSite || !editingTitleValue.trim()) {
+    if (!activeSite || !editingTitleValue.trim()) {
       setEditingTitleId(null);
       return;
     }
 
     try {
-      await updateNoteTitle(currentSite, noteId, editingTitleValue.trim());
+      await updateNoteTitle(activeSite, noteId, editingTitleValue.trim());
       setEditingTitleId(null);
       toast.success('标题已更新');
     } catch (err) {
@@ -180,7 +167,7 @@ export default function EditorPanel() {
       setCurrentSite(actualCurrentSite);
 
       // Auto-create a new note for the current tab
-      const emptyContent = { type: 'doc', content: [] };
+      const emptyContent = '';
       const title = generateTitle(emptyContent);
       const newNote = await addNote(actualCurrentSite, emptyContent, title);
       setSelectedNoteId(newNote.id);
@@ -189,9 +176,9 @@ export default function EditorPanel() {
     }
   };
 
-  const isOnDifferentSite = actualCurrentSite && currentSite && actualCurrentSite !== currentSite;
+  const isOnDifferentSite = actualCurrentSite && activeSite && actualCurrentSite !== activeSite;
 
-  if (!currentSite) {
+  if (!activeSite) {
     return (
       <div className="flex-1 flex items-center justify-center text-center p-8">
         <div>
@@ -219,7 +206,7 @@ export default function EditorPanel() {
           >
             {showNoteList ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
-          <h2 className="text-lg font-semibold">{currentSite}</h2>
+          <h2 className="text-lg font-semibold">{activeSite}</h2>
           <span className="text-xs px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-full text-zinc-500">
             {siteNotes.length} 条笔记
           </span>
@@ -278,7 +265,7 @@ export default function EditorPanel() {
                   }`}
                 >
                   <div className="flex items-start justify-between mb-1">
-                    {_editingTitleId === note.id ? (
+                    {editingTitleId === note.id ? (
                       <input
                         type="text"
                         value={editingTitleValue}
@@ -332,6 +319,8 @@ export default function EditorPanel() {
         <div className="flex-1 p-4 overflow-y-auto">
           {selectedNote ? (
             <MarkdownEditor
+              key={selectedNote.id}
+              noteId={selectedNote.id}
               content={selectedNote.content}
               onUpdate={handleEditorUpdate}
             />

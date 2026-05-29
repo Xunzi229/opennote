@@ -9,6 +9,7 @@ import {
   deleteSite as storageDeleteSite,
   onNotesChange,
 } from '../lib/storage';
+import { contentToMarkdown } from '../lib/markdownContent';
 import { toast } from 'sonner';
 
 interface NotesState {
@@ -27,6 +28,7 @@ interface NotesState {
   updateNoteTitle: (site: string, id: string, title: string) => Promise<void>;
   deleteSite: (site: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
+  filteredSites: () => string[];
   filteredNotes: (site: string) => Note[];
 }
 
@@ -117,11 +119,12 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     try {
       await storageDeleteSite(site);
       const notes = await getNotes();
-      set({ notes });
-      // If current site was deleted, clear selection
-      if (get().currentSite === site) {
-        set({ currentSite: null });
-      }
+      const remainingSites = Object.keys(notes).sort();
+      set({
+        notes,
+        currentSite:
+          get().currentSite === site ? remainingSites[0] ?? null : get().currentSite,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete site';
       set({ error: message });
@@ -133,19 +136,32 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     set({ searchQuery: query });
   },
 
+  filteredSites: () => {
+    const { notes, searchQuery } = get();
+    const hostnames = Object.keys(notes).sort();
+    if (!searchQuery) return hostnames;
+
+    const query = searchQuery.toLowerCase();
+    return hostnames.filter((hostname) => {
+      if (hostname.toLowerCase().includes(query)) return true;
+      return (notes[hostname] || []).some((note) => noteMatchesQuery(note, query));
+    });
+  },
+
   filteredNotes: (site) => {
     const { notes, searchQuery } = get();
     const siteNotes = notes[site] || [];
     if (!searchQuery) return siteNotes;
 
     const query = searchQuery.toLowerCase();
-    return siteNotes.filter((note) => {
-      // Simple content search - check if query exists in JSON stringified content
-      const contentStr = JSON.stringify(note.content).toLowerCase();
-      return contentStr.includes(query);
-    });
+    return siteNotes.filter((note) => noteMatchesQuery(note, query));
   },
 }));
+
+function noteMatchesQuery(note: Note, query: string): boolean {
+  if (note.title.toLowerCase().includes(query)) return true;
+  return contentToMarkdown(note.content).toLowerCase().includes(query);
+}
 
 // Subscribe to storage changes for cross-panel sync
 onNotesChange((notes) => {

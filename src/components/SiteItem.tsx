@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Globe } from 'lucide-react';
+import { getSiteFaviconUrl } from '../lib/favicon';
 
 interface SiteItemProps {
   hostname: string;
@@ -8,6 +10,8 @@ interface SiteItemProps {
 }
 
 export default function SiteItem({ hostname, noteCount, isActive, onClick }: SiteItemProps) {
+  const [iconError, setIconError] = useState(false);
+
   return (
     <button
       onClick={onClick}
@@ -18,7 +22,16 @@ export default function SiteItem({ hostname, noteCount, isActive, onClick }: Sit
       }`}
     >
       <div className="flex items-center gap-2 min-w-0">
-        <Globe className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+        {iconError ? (
+          <Globe className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+        ) : (
+          <img
+            src={getSiteFaviconUrl(hostname, 32)}
+            alt=""
+            className="w-4 h-4 flex-shrink-0 rounded-sm object-contain"
+            onError={() => setIconError(true)}
+          />
+        )}
         <span className="text-sm truncate">{hostname}</span>
       </div>
       <span className="text-xs text-zinc-400 dark:text-zinc-500 flex-shrink-0 ml-2">

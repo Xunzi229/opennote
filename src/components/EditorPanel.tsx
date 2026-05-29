@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNotesStore } from '../store/notesStore';
 import type { Note } from '../types';
-import TipTapEditor from './TipTapEditor';
+import MarkdownEditor from './MarkdownEditor';
 import { FileText, Plus, Trash2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -135,7 +135,6 @@ export default function EditorPanel() {
     e.stopPropagation();
     if (!currentSite) return;
 
-    if (!confirm('确定删除这条笔记？')) return;
 
     await deleteNote(currentSite, noteId);
     if (selectedNoteId === noteId) {
@@ -332,7 +331,7 @@ export default function EditorPanel() {
         {/* Editor - Takes remaining space */}
         <div className="flex-1 p-4 overflow-y-auto">
           {selectedNote ? (
-            <TipTapEditor
+            <MarkdownEditor
               content={selectedNote.content}
               onUpdate={handleEditorUpdate}
             />

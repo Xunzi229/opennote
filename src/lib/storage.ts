@@ -106,6 +106,12 @@ export async function updateNoteTitle(hostname: string, id: string, title: strin
   await setNotes(notes);
 }
 
+export async function deleteSite(hostname: string): Promise<void> {
+  const notes = await getNotes();
+  delete notes[hostname];
+  await setNotes(notes);
+}
+
 export function onNotesChange(callback: (notes: NotesStore) => void): () => void {
   const listener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
     if (changes[NOTES_KEY]) {

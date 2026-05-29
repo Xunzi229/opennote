@@ -6,6 +6,7 @@ import {
   updateNote as storageUpdateNote,
   deleteNote as storageDeleteNote,
   updateNoteTitle as storageUpdateNoteTitle,
+  deleteSite as storageDeleteSite,
   onNotesChange,
 } from '../lib/storage';
 import { toast } from 'sonner';
@@ -13,6 +14,7 @@ import { toast } from 'sonner';
 interface NotesState {
   notes: NotesStore;
   currentSite: string | null;
+  selectedNoteId: string | null;
   searchQuery: string;
   isLoading: boolean;
   error: string | null;
@@ -23,6 +25,7 @@ interface NotesState {
   updateNote: (site: string, id: string, content: any) => Promise<void>;
   deleteNote: (site: string, id: string) => Promise<void>;
   updateNoteTitle: (site: string, id: string, title: string) => Promise<void>;
+  deleteSite: (site: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
   filteredNotes: (site: string) => Note[];
 }
@@ -30,6 +33,7 @@ interface NotesState {
 export const useNotesStore = create<NotesState>((set, get) => ({
   notes: {},
   currentSite: null,
+  selectedNoteId: null,
   searchQuery: '',
   isLoading: false,
   error: null,
@@ -104,6 +108,22 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       set({ notes });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update title';
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  deleteSite: async (site) => {
+    try {
+      await storageDeleteSite(site);
+      const notes = await getNotes();
+      set({ notes });
+      // If current site was deleted, clear selection
+      if (get().currentSite === site) {
+        set({ currentSite: null });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete site';
       set({ error: message });
       throw err;
     }

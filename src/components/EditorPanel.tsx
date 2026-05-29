@@ -17,21 +17,34 @@ export default function EditorPanel() {
   const siteNotes = currentSite ? filteredNotes(currentSite) : [];
   const selectedNote = siteNotes.find((n) => n.id === selectedNoteId) || null;
 
-  // Detect actual current tab
+  // Detect actual current tab and listen for tab changes
   useEffect(() => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const tab = tabs[0];
-      if (tab?.url) {
-        try {
-          const url = new URL(tab.url);
-          if (!url.protocol.startsWith('chrome')) {
-            setActualCurrentSite(url.hostname);
+    const updateCurrentTab = () => {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs[0];
+        if (tab?.url) {
+          try {
+            const url = new URL(tab.url);
+            if (!url.protocol.startsWith('chrome')) {
+              setActualCurrentSite(url.hostname);
+            }
+          } catch {
+            // Invalid URL
           }
-        } catch {
-          // Invalid URL
         }
-      }
-    });
+      });
+    };
+
+    // Initial detection
+    updateCurrentTab();
+
+    // Listen for tab activation changes
+    chrome.tabs.onActivated.addListener(updateCurrentTab);
+
+    // Cleanup listener
+    return () => {
+      chrome.tabs.onActivated.removeListener(updateCurrentTab);
+    };
   }, []);
 
   // Auto-select first note or create new one when site changes
@@ -144,10 +157,17 @@ export default function EditorPanel() {
     setEditingTitleValue('');
   };
 
-  const handleSwitchToCurrentTab = () => {
+  const handleSwitchToCurrentTab = async () => {
     if (actualCurrentSite) {
       setCurrentSite(actualCurrentSite);
-      toast.success(`已切换到 ${actualCurrentSite}`);
+
+      // Auto-create a new note for the current tab
+      const emptyContent = { type: 'doc', content: [] };
+      const title = generateTitle(emptyContent);
+      const newNote = await addNote(actualCurrentSite, emptyContent, title);
+      setSelectedNoteId(newNote.id);
+
+      toast.success(`已切换到 ${actualCurrentSite} 并创建新笔记`);
     }
   };
 

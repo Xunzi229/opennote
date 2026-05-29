@@ -26,7 +26,7 @@ export default function TipTapEditor({ content, onUpdate, onBlur }: TipTapEditor
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[200px] p-4',
+        class: 'prose prose-sm dark:prose-invert max-w-none focus:outline-none p-4 h-full',
       },
     },
   });
@@ -46,8 +46,8 @@ export default function TipTapEditor({ content, onUpdate, onBlur }: TipTapEditor
   }
 
   return (
-    <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950">
-      <EditorContent editor={editor} />
+    <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950 flex flex-col h-full">
+      <EditorContent editor={editor} className="flex-1 overflow-y-auto" />
     </div>
   );
 }

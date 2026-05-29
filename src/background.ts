@@ -1,59 +1,56 @@
 // OpenNote Background Service Worker
 
-function configureSidePanel() {
-  chrome.sidePanel.setOptions({ path: 'index.html' });
+function setupContextMenu() {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: 'save-note',
+      title: '保存为笔记',
+      contexts: ['selection'],
+    });
+  });
 }
 
-// Register context menu and side panel on install
 chrome.runtime.onInstalled.addListener(() => {
-  configureSidePanel();
-  chrome.contextMenus.create({
-    id: 'save-note',
-    title: '保存为笔记',
-    contexts: ['selection']
-  });
+  setupContextMenu();
 });
 
-// Handle context menu click
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === 'save-note' && tab?.id) {
-    if (isSpecialPage(tab.url)) {
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icon-48.png',
-        title: 'OpenNote',
-        message: '此页面不支持笔记',
-      });
-      return;
-    }
-    // Store pending note content in session storage
-    if (info.selectionText) {
-      await chrome.storage.session.set({ pendingNoteContent: info.selectionText });
-    }
-    // Open side panel
-    await chrome.sidePanel.open({ tabId: tab.id });
-  }
-});
-
-// Check if URL is a special page that doesn't support extensions
 function isSpecialPage(url: string | undefined): boolean {
   if (!url) return true;
   return url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('about:');
 }
 
-// Handle toolbar icon click - open side panel
-chrome.action.onClicked.addListener(async (tab) => {
-  if (tab.id && !isSpecialPage(tab.url)) {
-    await chrome.sidePanel.open({ tabId: tab.id });
-  } else if (tab.id) {
-    // Show notification for special pages
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== 'save-note' || !tab?.id) return;
+
+  if (isSpecialPage(tab.url)) {
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icon-48.png',
       title: 'OpenNote',
       message: '此页面不支持笔记',
     });
+    return;
   }
+
+  if (info.selectionText) {
+    await chrome.storage.session.set({ pendingNoteContent: info.selectionText });
+  }
+
+  await chrome.sidePanel.open({ tabId: tab.id });
 });
 
-chrome.runtime.onStartup.addListener(configureSidePanel);
+chrome.action.onClicked.addListener(async (tab) => {
+  if (!tab.id) return;
+
+  if (isSpecialPage(tab.url)) {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icon-48.png',
+      title: 'OpenNote',
+      message: '此页面不支持笔记',
+    });
+    return;
+  }
+
+  await chrome.sidePanel.open({ tabId: tab.id });
+});

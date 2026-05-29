@@ -4,10 +4,12 @@ import { EditorView, keymap, placeholder, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
-import { oneDark } from '@codemirror/theme-one-dark';
 import { Code2, Sparkles } from 'lucide-react';
 import { contentToMarkdown } from '../lib/markdownContent';
-import LiveMarkdownEditor from './LiveMarkdownEditor';
+import { insertMarkdownSnippet, insertTableMarkdown } from '../lib/markdownInsert';
+import type { MarkdownInsertType } from '../lib/markdownInsertTypes';
+import LiveMarkdownEditor, { type LiveMarkdownEditorHandle } from './LiveMarkdownEditor';
+import MarkdownToolbar from './MarkdownToolbar';
 
 interface MarkdownEditorProps {
   content: unknown;
@@ -18,81 +20,62 @@ interface MarkdownEditorProps {
 
 type ViewMode = 'source' | 'live';
 
-const darkEditorTheme = EditorView.theme(
-  {
-    '.cm-content': {
-      textAlign: 'left',
-    },
-    '.cm-line': {
-      textAlign: 'left',
-    },
+const editorTheme = EditorView.theme({
+  '&': {
+    height: '100%',
+    backgroundColor: 'transparent',
   },
-  { dark: true },
-);
-
-const lightEditorTheme = EditorView.theme(
-  {
-    '&': {
-      height: '100%',
-      backgroundColor: 'transparent',
-    },
-    '.cm-scroller': {
-      overflow: 'auto',
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-    },
-    '.cm-content': {
-      padding: '16px',
-      fontSize: '14px',
-      lineHeight: '1.7',
-      caretColor: '#18181b',
-      textAlign: 'left',
-    },
-    '.cm-line': {
-      textAlign: 'left',
-    },
-    '.cm-gutters': {
-      backgroundColor: 'transparent',
-      border: 'none',
-      color: '#a1a1aa',
-    },
-    '&.cm-focused': {
-      outline: 'none',
-    },
+  '.cm-scroller': {
+    overflow: 'auto',
+    fontFamily: 'var(--font-mono)',
   },
-  { dark: false },
-);
+  '.cm-content': {
+    padding: '20px 16px',
+    fontSize: '14px',
+    lineHeight: '1.75',
+    caretColor: 'var(--color-text)',
+    textAlign: 'left',
+  },
+  '.cm-line': {
+    textAlign: 'left',
+  },
+  '.cm-gutters': {
+    backgroundColor: '#fafafa',
+    borderRight: '1px solid var(--color-border)',
+    color: '#94a3b8',
+  },
+  '&.cm-focused': {
+    outline: 'none',
+  },
+});
 
 export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: MarkdownEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const liveEditorRef = useRef<LiveMarkdownEditorHandle>(null);
   const onUpdateRef = useRef(onUpdate);
   const onBlurRef = useRef(onBlur);
   const markdownTextRef = useRef(contentToMarkdown(content));
-  const [viewMode, setViewMode] = useState<ViewMode>('source');
+  const isExternalUpdateRef = useRef(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('live');
   const [markdownText, setMarkdownText] = useState(() => contentToMarkdown(content));
-  const [isDark, setIsDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   onUpdateRef.current = onUpdate;
   onBlurRef.current = onBlur;
 
-  const syncMarkdown = (text: string) => {
+  const syncMarkdown = (text: string, fromExternal = false) => {
     markdownTextRef.current = text;
     setMarkdownText(text);
-    onUpdateRef.current(text);
+    if (!fromExternal && !isExternalUpdateRef.current) {
+      onUpdateRef.current(text);
+    }
   };
-
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (event: MediaQueryListEvent) => setIsDark(event.matches);
-    media.addEventListener('change', handler);
-    return () => media.removeEventListener('change', handler);
-  }, []);
 
   useEffect(() => {
     const text = contentToMarkdown(content);
     markdownTextRef.current = text;
     setMarkdownText(text);
-    setViewMode('source');
+    setViewMode('live');
   }, [noteId]);
 
   useEffect(() => {
@@ -106,9 +89,9 @@ export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: Ma
         markdown({ base: markdownLanguage }),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-        placeholder('输入 Markdown 笔记...\n\n支持 **粗体**、*斜体*、# 标题、- 列表、```代码块```'),
+        placeholder('开始编写 Markdown 笔记...'),
         EditorView.lineWrapping,
-        isDark ? [oneDark, darkEditorTheme] : lightEditorTheme,
+        editorTheme,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             syncMarkdown(update.state.doc.toString());
@@ -131,7 +114,7 @@ export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: Ma
       view.destroy();
       viewRef.current = null;
     };
-  }, [noteId, isDark, viewMode]);
+  }, [noteId, viewMode]);
 
   useEffect(() => {
     if (!viewRef.current || viewMode !== 'source') return;
@@ -140,38 +123,61 @@ export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: Ma
     const currentDoc = viewRef.current.state.doc.toString();
 
     if (newDoc !== currentDoc) {
+      isExternalUpdateRef.current = true;
       viewRef.current.dispatch({
         changes: { from: 0, to: currentDoc.length, insert: newDoc },
       });
-      markdownTextRef.current = newDoc;
-      setMarkdownText(newDoc);
+      syncMarkdown(newDoc, true);
+      isExternalUpdateRef.current = false;
     }
   }, [content, viewMode]);
 
   const modeButtonClass = (mode: ViewMode) =>
-    `flex items-center gap-1.5 px-2.5 py-1 text-xs rounded transition-colors ${
-      viewMode === mode
-        ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900'
-        : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-    }`;
+    `btn ${viewMode === mode ? 'btn-primary' : 'btn-secondary'} !h-8 !px-3 !text-[12px]`;
+
+  const handleInsert = (type: MarkdownInsertType) => {
+    if (viewMode === 'source') {
+      if (viewRef.current) {
+        insertMarkdownSnippet(viewRef.current, type);
+      }
+      return;
+    }
+
+    liveEditorRef.current?.insert(type);
+  };
+
+  const handleInsertTable = (rows: number, cols: number) => {
+    if (viewMode === 'source') {
+      if (viewRef.current) {
+        insertTableMarkdown(viewRef.current, rows, cols);
+      }
+      return;
+    }
+
+    liveEditorRef.current?.insert('table', { rows, cols });
+  };
 
   return (
-    <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg bg-white dark:bg-zinc-950 flex flex-col h-full min-h-[320px] overflow-hidden">
-      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-zinc-200 dark:border-zinc-800">
-        <button type="button" onClick={() => setViewMode('source')} className={modeButtonClass('source')}>
-          <Code2 className="w-3.5 h-3.5" />
-          源码
-        </button>
-        <button type="button" onClick={() => setViewMode('live')} className={modeButtonClass('live')}>
-          <Sparkles className="w-3.5 h-3.5" />
-          实时渲染
-        </button>
+    <div className="editor-shell flex flex-col h-full overflow-hidden">
+      <div className="border-b border-[var(--color-border)] bg-[#fafafa]">
+        <div className="flex items-center gap-2 px-3 py-2">
+          <button type="button" onClick={() => setViewMode('source')} className={modeButtonClass('source')}>
+            <Code2 className="w-3.5 h-3.5" />
+            编辑
+          </button>
+          <button type="button" onClick={() => setViewMode('live')} className={modeButtonClass('live')}>
+            <Sparkles className="w-3.5 h-3.5" />
+            实时渲染
+          </button>
+        </div>
+        <MarkdownToolbar onInsert={handleInsert} onInsertTable={handleInsertTable} />
       </div>
 
       {viewMode === 'source' ? (
-        <div ref={editorRef} className="flex-1 overflow-hidden" />
+        <div ref={editorRef} className="flex-1 overflow-hidden min-h-[280px]" />
       ) : (
         <LiveMarkdownEditor
+          ref={liveEditorRef}
           key={`${noteId}-${viewMode}`}
           noteId={noteId}
           content={markdownText}

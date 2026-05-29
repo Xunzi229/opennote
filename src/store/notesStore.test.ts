@@ -7,7 +7,9 @@ describe('notesStore', () => {
     useNotesStore.setState({
       notes: {},
       currentSite: null,
+      selectedNoteId: null,
       searchQuery: '',
+      noteFilter: 'all',
       isLoading: false,
       error: null,
     });

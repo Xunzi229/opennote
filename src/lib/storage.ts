@@ -51,6 +51,9 @@ export async function addNote(hostname: string, content: any, title: string): Pr
     content,
     createdAt: now,
     updatedAt: now,
+    pinned: false,
+    favorite: false,
+    tags: [],
   };
 
   if (!notes[hostname]) {
@@ -100,6 +103,26 @@ export async function updateNoteTitle(hostname: string, id: string, title: strin
   notes[hostname][noteIndex] = {
     ...notes[hostname][noteIndex],
     title,
+    updatedAt: Date.now(),
+  };
+
+  await setNotes(notes);
+}
+
+export async function updateNoteMeta(
+  hostname: string,
+  id: string,
+  meta: Partial<Pick<Note, 'pinned' | 'favorite' | 'tags'>>,
+): Promise<void> {
+  const notes = await getNotes();
+  if (!notes[hostname]) return;
+
+  const noteIndex = notes[hostname].findIndex((n) => n.id === id);
+  if (noteIndex === -1) return;
+
+  notes[hostname][noteIndex] = {
+    ...notes[hostname][noteIndex],
+    ...meta,
     updatedAt: Date.now(),
   };
 

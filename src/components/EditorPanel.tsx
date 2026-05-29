@@ -1,78 +1,55 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNotesStore } from '../store/notesStore';
-import type { Note } from '../types';
+import { useActiveSite } from '../hooks/useActiveSite';
 import MarkdownEditor from './MarkdownEditor';
-import { isContentEmpty, contentPreview } from '../lib/markdownContent';
-import { FileText, Plus, Trash2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { isContentEmpty, contentToMarkdown } from '../lib/markdownContent';
+import { getNoteStats, formatRelativeTime } from '../lib/noteStats';
+import {
+  FileText,
+  Trash2,
+  Star,
+  Pin,
+  Tag,
+  MoreHorizontal,
+} from 'lucide-react';
 import { toast } from 'sonner';
+import PromptDialog from './PromptDialog';
 
 export default function EditorPanel() {
-  const { currentSite, addNote, updateNote, deleteNote, updateNoteTitle, filteredNotes, setCurrentSite } = useNotesStore();
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
-  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
-  const [editingTitleValue, setEditingTitleValue] = useState('');
-  const [showNoteList, setShowNoteList] = useState(true);
-  const [actualCurrentSite, setActualCurrentSite] = useState<string | null>(null);
+  const {
+    currentSite,
+    selectedNoteId,
+    setSelectedNoteId,
+    sortedNotes,
+    addNote,
+    updateNote,
+    deleteNote,
+    toggleNotePin,
+    toggleNoteFavorite,
+    addNoteTag,
+  } = useNotesStore();
 
+  const actualCurrentSite = useActiveSite();
   const activeSite = currentSite ?? actualCurrentSite;
-  const siteNotes = activeSite ? filteredNotes(activeSite) : [];
+  const siteNotes = activeSite ? sortedNotes(activeSite) : [];
   const selectedNote = siteNotes.find((n) => n.id === selectedNoteId) || null;
 
-  const ensureCurrentSite = (site: string) => {
-    if (!currentSite) {
-      setCurrentSite(site);
-    }
-  };
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [editorContent, setEditorContent] = useState('');
+  const [showTagDialog, setShowTagDialog] = useState(false);
+  const [tagInput, setTagInput] = useState('');
 
-  // Detect actual current tab and listen for tab changes
   useEffect(() => {
-    const updateCurrentTab = () => {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const tab = tabs[0];
-        if (tab?.url) {
-          try {
-            const url = new URL(tab.url);
-            if (!url.protocol.startsWith('chrome')) {
-              setActualCurrentSite(url.hostname);
-            }
-          } catch {
-            // Invalid URL
-          }
-        }
-      });
-    };
-
-    // Initial detection
-    updateCurrentTab();
-
-    // Listen for tab activation changes
-    chrome.tabs.onActivated.addListener(updateCurrentTab);
-
-    // Cleanup listener
-    return () => {
-      chrome.tabs.onActivated.removeListener(updateCurrentTab);
-    };
-  }, []);
-
-  // Auto-select first note or create new one when site changes
-  useEffect(() => {
-    if (activeSite) {
-      if (siteNotes.length > 0) {
-        setSelectedNoteId(siteNotes[0].id);
-      } else {
-        setSelectedNoteId(null);
-      }
+    if (selectedNote) {
+      setEditorContent(contentToMarkdown(selectedNote.content));
     }
-  }, [activeSite, siteNotes.length]);
+  }, [selectedNote?.id]);
 
-  // Debounced auto-save
   const debouncedSave = useCallback(
     (() => {
       let timeout: ReturnType<typeof setTimeout>;
       return (site: string, id: string, content: string) => {
         clearTimeout(timeout);
-        // Don't auto-save if content is empty
         if (isContentEmpty(content)) {
           setSaveStatus('saved');
           return;
@@ -82,256 +59,148 @@ export default function EditorPanel() {
           try {
             await updateNote(site, id, content);
             setSaveStatus('saved');
-          } catch (err) {
+          } catch {
             setSaveStatus('error');
             toast.error('保存失败');
           }
         }, 2000);
       };
     })(),
-    [updateNote]
+    [updateNote],
   );
 
   const handleEditorUpdate = (content: string) => {
-    if (activeSite && selectedNote) {
-      if (!isContentEmpty(content)) {
-        debouncedSave(activeSite, selectedNote.id, content);
-      }
+    setEditorContent(content);
+    if (activeSite && selectedNote && !isContentEmpty(content)) {
+      debouncedSave(activeSite, selectedNote.id, content);
     }
   };
 
-  // Generate title from timestamp + first 10 non-whitespace chars of content
-  const generateTitle = (content: string): string => {
-    const now = new Date();
-    const timeStr = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    const preview = contentPreview(content, 10);
-    return preview ? `${timeStr} ${preview}` : `${timeStr} 新笔记`;
-  };
-
-  const handleCreateNote = async () => {
-    if (!activeSite) return;
-
-    ensureCurrentSite(activeSite);
-    const emptyContent = '';
-    const title = generateTitle(emptyContent);
-    const newNote = await addNote(activeSite, emptyContent, title);
-    setSelectedNoteId(newNote.id);
-    toast.success('已创建新笔记');
-  };
-
-  const handleDeleteNote = async (noteId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!activeSite) return;
-
-    await deleteNote(activeSite, noteId);
-    if (selectedNoteId === noteId) {
-      const remaining = siteNotes.filter((n) => n.id !== noteId);
-      setSelectedNoteId(remaining.length > 0 ? remaining[0].id : null);
-    }
+  const handleDeleteNote = async () => {
+    if (!activeSite || !selectedNote) return;
+    await deleteNote(activeSite, selectedNote.id);
+    const remaining = siteNotes.filter((n) => n.id !== selectedNote.id);
+    setSelectedNoteId(remaining[0]?.id ?? null);
     toast.success('笔记已删除');
   };
 
-  const handleSelectNote = (noteId: string) => {
-    setSelectedNoteId(noteId);
-    setSaveStatus('saved');
+  const handleAddTag = () => {
+    if (!activeSite || !selectedNote) return;
+    setTagInput('');
+    setShowTagDialog(true);
   };
 
-  const handleStartEditTitle = (note: Note, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingTitleId(note.id);
-    setEditingTitleValue(note.title);
+  const handleConfirmTag = async () => {
+    if (!activeSite || !selectedNote) return;
+    const tag = tagInput.trim();
+    if (!tag) return;
+
+    await addNoteTag(activeSite, selectedNote.id, tag);
+    setShowTagDialog(false);
+    setTagInput('');
+    toast.success('标签已添加');
   };
 
-  const handleSaveTitle = async (noteId: string) => {
-    if (!activeSite || !editingTitleValue.trim()) {
-      setEditingTitleId(null);
-      return;
-    }
-
-    try {
-      await updateNoteTitle(activeSite, noteId, editingTitleValue.trim());
-      setEditingTitleId(null);
-      toast.success('标题已更新');
-    } catch (err) {
-      toast.error('更新标题失败');
-    }
+  const handleCreateFirstNote = async () => {
+    if (!activeSite) return;
+    const now = new Date();
+    const title = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} 新笔记`;
+    const note = await addNote(activeSite, '', title);
+    setSelectedNoteId(note.id);
   };
-
-  const handleCancelEditTitle = () => {
-    setEditingTitleId(null);
-    setEditingTitleValue('');
-  };
-
-  const handleSwitchToCurrentTab = async () => {
-    if (actualCurrentSite) {
-      setCurrentSite(actualCurrentSite);
-
-      // Auto-create a new note for the current tab
-      const emptyContent = '';
-      const title = generateTitle(emptyContent);
-      const newNote = await addNote(actualCurrentSite, emptyContent, title);
-      setSelectedNoteId(newNote.id);
-
-      toast.success(`已切换到 ${actualCurrentSite} 并创建新笔记`);
-    }
-  };
-
-  const isOnDifferentSite = actualCurrentSite && activeSite && actualCurrentSite !== activeSite;
 
   if (!activeSite) {
     return (
-      <div className="flex-1 flex items-center justify-center text-center p-8">
-        <div>
-          <FileText className="w-12 h-12 mx-auto text-zinc-300 dark:text-zinc-700 mb-4" />
-          <h2 className="text-lg font-medium text-zinc-500 dark:text-zinc-400">
-            选择一个网站开始记录
-          </h2>
-          <p className="text-sm text-zinc-400 dark:text-zinc-500 mt-2">
-            从左侧列表选择网站，或访问任意网页后打开插件
-          </p>
+      <main className="panel panel-editor">
+        <div className="empty-state h-full flex flex-col items-center justify-center">
+          <FileText className="empty-state-icon" />
+          <p className="text-[14px] font-medium">等待选择网站</p>
         </div>
-      </div>
+      </main>
     );
   }
 
-  return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowNoteList(!showNoteList)}
-            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded"
-            title={showNoteList ? '隐藏笔记列表' : '显示笔记列表'}
-          >
-            {showNoteList ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          </button>
-          <h2 className="text-lg font-semibold">{activeSite}</h2>
-          <span className="text-xs px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 rounded-full text-zinc-500">
-            {siteNotes.length} 条笔记
-          </span>
-          {isOnDifferentSite && (
-            <button
-              onClick={handleSwitchToCurrentTab}
-              className="flex items-center gap-1.5 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
-              title={`切换到当前标签页: ${actualCurrentSite}`}
-            >
-              <RefreshCw className="w-3 h-3" />
-              回到当前标签页
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          {saveStatus === 'saving' && (
-            <span className="text-xs text-zinc-400">保存中...</span>
-          )}
-          {saveStatus === 'saved' && selectedNote && (
-            <span className="text-xs text-green-500">已保存</span>
-          )}
-          {saveStatus === 'error' && (
-            <span className="text-xs text-red-500">保存失败</span>
-          )}
-          <button
-            onClick={handleCreateNote}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-md hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
+  if (!selectedNote) {
+    return (
+      <main className="panel panel-editor">
+        <div className="empty-state h-full flex flex-col items-center justify-center">
+          <FileText className="empty-state-icon" />
+          <p className="text-[14px] font-medium text-[var(--color-text)]">选择或创建一条笔记</p>
+          <button onClick={handleCreateFirstNote} className="btn btn-primary mt-4">
             新建笔记
           </button>
         </div>
-      </div>
+      </main>
+    );
+  }
 
-      {/* Content Area - Two Column Layout (Note List + Editor) */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Note List - Collapsible */}
-        {showNoteList && (
-          <div className="w-64 border-r border-zinc-200 dark:border-zinc-800 overflow-y-auto p-2 flex-shrink-0">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <div className="text-xs text-zinc-400">笔记列表</div>
-            </div>
-            {siteNotes.length === 0 ? (
-              <div className="p-4 text-center text-sm text-zinc-400">
-                还没有笔记
-              </div>
-            ) : (
-              siteNotes.map((note: Note) => (
-                <div
-                  key={note.id}
-                  onClick={() => handleSelectNote(note.id)}
-                  className={`group p-3 mb-1 rounded-lg cursor-pointer border transition-colors ${
-                    selectedNoteId === note.id
-                      ? 'border-zinc-400 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900'
-                      : 'border-transparent hover:bg-zinc-50 dark:hover:bg-zinc-900'
-                  }`}
-                >
-                  <div className="flex items-start justify-between mb-1">
-                    {editingTitleId === note.id ? (
-                      <input
-                        type="text"
-                        value={editingTitleValue}
-                        onChange={(e) => setEditingTitleValue(e.target.value)}
-                        onBlur={() => handleSaveTitle(note.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveTitle(note.id);
-                          if (e.key === 'Escape') handleCancelEditTitle();
-                        }}
-                        className="text-sm font-medium bg-transparent border-b border-zinc-400 focus:outline-none flex-1 mr-2"
-                        autoFocus
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    ) : (
-                      <div
-                        onClick={(e) => handleStartEditTitle(note, e)}
-                        className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate cursor-text hover:underline flex-1 mr-2"
-                        title="点击编辑标题"
-                      >
-                        {note.title}
-                      </div>
-                    )}
-                    <button
-                      onClick={(e) => handleDeleteNote(note.id, e)}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded flex-shrink-0"
-                    >
-                      <Trash2 className="w-3 h-3 text-zinc-400" />
-                    </button>
-                  </div>
-                  <div className="text-xs text-zinc-400">
-                    {new Date(note.updatedAt).toLocaleDateString('zh-CN')}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
+  const stats = getNoteStats(editorContent || selectedNote.content);
 
-        {/* Toggle Note List Button (when hidden) */}
-        {!showNoteList && (
+  return (
+    <main className="panel panel-editor">
+      <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <button
-            onClick={() => setShowNoteList(true)}
-            className="w-8 border-r border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center"
-            title="显示笔记列表"
+            onClick={() => toggleNotePin(activeSite, selectedNote.id)}
+            className={`btn btn-ghost btn-icon ${selectedNote.pinned ? 'text-[var(--color-primary)]' : ''}`}
+            title="置顶"
           >
-            <ChevronRight className="w-4 h-4" />
+            <Pin className="w-4 h-4" />
           </button>
-        )}
+          <button
+            onClick={() => toggleNoteFavorite(activeSite, selectedNote.id)}
+            className={`btn btn-ghost btn-icon ${selectedNote.favorite ? 'text-amber-500' : ''}`}
+            title="收藏"
+          >
+            <Star className={`w-4 h-4 ${selectedNote.favorite ? 'fill-amber-500' : ''}`} />
+          </button>
+          <button onClick={handleAddTag} className="btn btn-ghost btn-icon" title="添加标签">
+            <Tag className="w-4 h-4" />
+          </button>
+          <button onClick={handleDeleteNote} className="btn btn-ghost btn-icon text-[var(--color-danger)]" title="删除">
+            <Trash2 className="w-4 h-4" />
+          </button>
+          <button className="btn btn-ghost btn-icon" title="更多">
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+        </div>
 
-        {/* Editor - Takes remaining space */}
-        <div className="flex-1 p-4 overflow-y-auto">
-          {selectedNote ? (
-            <MarkdownEditor
-              key={selectedNote.id}
-              noteId={selectedNote.id}
-              content={selectedNote.content}
-              onUpdate={handleEditorUpdate}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <FileText className="w-10 h-10 text-zinc-300 dark:text-zinc-700 mb-3" />
-              <p className="text-zinc-400">选择或创建一条笔记开始编辑</p>
-            </div>
-          )}
+        <div className="text-[12px] text-[var(--color-text-secondary)]">
+          {saveStatus === 'saving' && '保存中...'}
+          {saveStatus === 'saved' && '已自动保存'}
+          {saveStatus === 'error' && <span className="text-[var(--color-danger)]">保存失败</span>}
         </div>
       </div>
-    </div>
+
+      <div className="flex-1 overflow-hidden p-4">
+        <MarkdownEditor
+          key={selectedNote.id}
+          noteId={selectedNote.id}
+          content={selectedNote.content}
+          onUpdate={handleEditorUpdate}
+        />
+      </div>
+
+      <div className="px-5 py-2.5 border-t border-[var(--color-border)] flex items-center justify-between text-[12px] text-[var(--color-text-secondary)] bg-[#fafafa]">
+        <span>最后编辑 {formatRelativeTime(selectedNote.updatedAt)}</span>
+        <span>
+          {stats.chars} 字 · {stats.lines} 行
+        </span>
+      </div>
+
+      <PromptDialog
+        isOpen={showTagDialog}
+        title="添加标签"
+        label="标签名称"
+        placeholder="输入标签名称"
+        value={tagInput}
+        onChange={setTagInput}
+        onConfirm={handleConfirmTag}
+        onCancel={() => {
+          setShowTagDialog(false);
+          setTagInput('');
+        }}
+      />
+    </main>
   );
 }

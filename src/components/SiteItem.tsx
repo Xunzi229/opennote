@@ -15,26 +15,28 @@ export default function SiteItem({ hostname, noteCount, isActive, onClick }: Sit
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-left transition-colors ${
+      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-left transition-all ${
         isActive
-          ? 'bg-zinc-100 dark:bg-zinc-800'
-          : 'hover:bg-zinc-50 dark:hover:bg-zinc-900'
+          ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary-soft-text)]'
+          : 'text-[var(--color-text)] hover:bg-[#f8fafc]'
       }`}
     >
-      <div className="flex items-center gap-2 min-w-0">
-        {iconError ? (
-          <Globe className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-        ) : (
-          <img
-            src={getSiteFaviconUrl(hostname, 32)}
-            alt=""
-            className="w-4 h-4 flex-shrink-0 rounded-sm object-contain"
-            onError={() => setIconError(true)}
-          />
-        )}
-        <span className="text-sm truncate">{hostname}</span>
-      </div>
-      <span className="text-xs text-zinc-400 dark:text-zinc-500 flex-shrink-0 ml-2">
+      {iconError ? (
+        <Globe className="w-4 h-4 flex-shrink-0 text-[var(--color-text-secondary)]" />
+      ) : (
+        <img
+          src={getSiteFaviconUrl(hostname, 32)}
+          alt=""
+          className="w-4 h-4 flex-shrink-0 rounded-[4px] object-contain"
+          onError={() => setIconError(true)}
+        />
+      )}
+      <span className="text-[13px] truncate flex-1">{hostname}</span>
+      <span
+        className={`text-[11px] flex-shrink-0 ${
+          isActive ? 'text-[var(--color-primary-soft-text)]' : 'text-[var(--color-text-secondary)]'
+        }`}
+      >
         {noteCount}
       </span>
     </button>

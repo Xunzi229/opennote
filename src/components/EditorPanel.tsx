@@ -17,6 +17,17 @@ export default function EditorPanel() {
   const siteNotes = currentSite ? filteredNotes(currentSite) : [];
   const selectedNote = siteNotes.find((n) => n.id === selectedNoteId) || null;
 
+  // Check if content is empty (no actual text)
+  const isContentEmpty = (content: any): boolean => {
+    const extractText = (node: any): string => {
+      if (node.type === 'text') return node.text || '';
+      if (node.content) return node.content.map(extractText).join('');
+      return '';
+    };
+    const text = extractText(content);
+    return text.trim().length === 0;
+  };
+
   // Detect actual current tab and listen for tab changes
   useEffect(() => {
     const updateCurrentTab = () => {
@@ -64,6 +75,11 @@ export default function EditorPanel() {
       let timeout: ReturnType<typeof setTimeout>;
       return (site: string, id: string, content: any) => {
         clearTimeout(timeout);
+        // Don't auto-save if content is empty
+        if (isContentEmpty(content)) {
+          setSaveStatus('saved');
+          return;
+        }
         setSaveStatus('saving');
         timeout = setTimeout(async () => {
           try {
@@ -81,7 +97,10 @@ export default function EditorPanel() {
 
   const handleEditorUpdate = (content: any) => {
     if (currentSite && selectedNote) {
-      debouncedSave(currentSite, selectedNote.id, content);
+      // Only auto-save if content is not empty
+      if (!isContentEmpty(content)) {
+        debouncedSave(currentSite, selectedNote.id, content);
+      }
     }
   };
 

@@ -29,8 +29,8 @@ describe('notesStore', () => {
     useNotesStore.setState({
       notes: {
         'example.com': [
-          { id: '1', content: {}, createdAt: 1, updatedAt: 1 },
-          { id: '2', content: {}, createdAt: 2, updatedAt: 2 },
+          { id: '1', title: 'Note 1', content: {}, createdAt: 1, updatedAt: 1 },
+          { id: '2', title: 'Note 2', content: {}, createdAt: 2, updatedAt: 2 },
         ],
       },
     });
@@ -44,8 +44,8 @@ describe('notesStore', () => {
     useNotesStore.setState({
       notes: {
         'example.com': [
-          { id: '1', content: { text: 'hello world' }, createdAt: 1, updatedAt: 1 },
-          { id: '2', content: { text: 'foo bar' }, createdAt: 2, updatedAt: 2 },
+          { id: '1', title: 'Note 1', content: { text: 'hello world' }, createdAt: 1, updatedAt: 1 },
+          { id: '2', title: 'Note 2', content: { text: 'foo bar' }, createdAt: 2, updatedAt: 2 },
         ],
       },
       searchQuery: 'hello',

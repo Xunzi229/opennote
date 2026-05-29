@@ -1,5 +1,6 @@
 export interface Note {
   id: string;
+  title: string;
   content: any; // ProseMirror JSON from TipTap
   createdAt: number;
   updatedAt: number;

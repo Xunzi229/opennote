@@ -6,9 +6,11 @@ import { FileText, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function EditorPanel() {
-  const { currentSite, addNote, updateNote, deleteNote, filteredNotes } = useNotesStore();
+  const { currentSite, addNote, updateNote, deleteNote, updateNoteTitle, filteredNotes } = useNotesStore();
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [_editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editingTitleValue, setEditingTitleValue] = useState('');
 
   const siteNotes = currentSite ? filteredNotes(currentSite) : [];
   const selectedNote = siteNotes.find((n) => n.id === selectedNoteId) || null;
@@ -51,10 +53,29 @@ export default function EditorPanel() {
     }
   };
 
+  // Generate title from timestamp + first 10 non-whitespace chars of content
+  const generateTitle = (content: any): string => {
+    const now = new Date();
+    const timeStr = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+    const extractText = (node: any): string => {
+      if (node.type === 'text') return node.text || '';
+      if (node.content) return node.content.map(extractText).join('');
+      return '';
+    };
+
+    const fullText = extractText(content);
+    const nonWhitespace = fullText.replace(/\s/g, '').slice(0, 10);
+
+    return nonWhitespace ? `${timeStr} ${nonWhitespace}` : `${timeStr} 新笔记`;
+  };
+
   const handleCreateNote = async () => {
     if (!currentSite) return;
 
-    const newNote = await addNote(currentSite, { type: 'doc', content: [] });
+    const emptyContent = { type: 'doc', content: [] };
+    const title = generateTitle(emptyContent);
+    const newNote = await addNote(currentSite, emptyContent, title);
     setSelectedNoteId(newNote.id);
     toast.success('已创建新笔记');
   };
@@ -76,6 +97,32 @@ export default function EditorPanel() {
   const handleSelectNote = (noteId: string) => {
     setSelectedNoteId(noteId);
     setSaveStatus('saved');
+  };
+
+  const handleStartEditTitle = (note: Note, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingTitleId(note.id);
+    setEditingTitleValue(note.title);
+  };
+
+  const handleSaveTitle = async (noteId: string) => {
+    if (!currentSite || !editingTitleValue.trim()) {
+      setEditingTitleId(null);
+      return;
+    }
+
+    try {
+      await updateNoteTitle(currentSite, noteId, editingTitleValue.trim());
+      setEditingTitleId(null);
+      toast.success('标题已更新');
+    } catch (err) {
+      toast.error('更新标题失败');
+    }
+  };
+
+  const handleCancelEditTitle = () => {
+    setEditingTitleId(null);
+    setEditingTitleValue('');
   };
 
   if (!currentSite) {
@@ -143,16 +190,39 @@ export default function EditorPanel() {
                     : 'border-transparent hover:bg-zinc-50 dark:hover:bg-zinc-900'
                 }`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="text-xs text-zinc-400 mb-1">
-                    {new Date(note.updatedAt).toLocaleDateString('zh-CN')}
-                  </div>
+                <div className="flex items-start justify-between mb-1">
+                  {_editingTitleId === note.id ? (
+                    <input
+                      type="text"
+                      value={editingTitleValue}
+                      onChange={(e) => setEditingTitleValue(e.target.value)}
+                      onBlur={() => handleSaveTitle(note.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveTitle(note.id);
+                        if (e.key === 'Escape') handleCancelEditTitle();
+                      }}
+                      className="text-sm font-medium bg-transparent border-b border-zinc-400 focus:outline-none flex-1 mr-2"
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <div
+                      onClick={(e) => handleStartEditTitle(note, e)}
+                      className="text-sm font-medium text-zinc-700 dark:text-zinc-300 truncate cursor-text hover:underline flex-1 mr-2"
+                      title="点击编辑标题"
+                    >
+                      {note.title}
+                    </div>
+                  )}
                   <button
                     onClick={(e) => handleDeleteNote(note.id, e)}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded"
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded flex-shrink-0"
                   >
                     <Trash2 className="w-3 h-3 text-zinc-400" />
                   </button>
+                </div>
+                <div className="text-xs text-zinc-400 mb-1">
+                  {new Date(note.updatedAt).toLocaleDateString('zh-CN')}
                 </div>
                 <div className="text-sm text-zinc-600 dark:text-zinc-400 line-clamp-2">
                   {JSON.stringify(note.content).slice(0, 80)}...

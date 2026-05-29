@@ -42,11 +42,12 @@ export async function setMeta(meta: MetaStore): Promise<void> {
   });
 }
 
-export async function addNote(hostname: string, content: any): Promise<Note> {
+export async function addNote(hostname: string, content: any, title: string): Promise<Note> {
   const notes = await getNotes();
   const now = Date.now();
   const note: Note = {
     id: generateId(),
+    title,
     content,
     createdAt: now,
     updatedAt: now,
@@ -85,6 +86,22 @@ export async function deleteNote(hostname: string, id: string): Promise<void> {
   if (notes[hostname].length === 0) {
     delete notes[hostname];
   }
+
+  await setNotes(notes);
+}
+
+export async function updateNoteTitle(hostname: string, id: string, title: string): Promise<void> {
+  const notes = await getNotes();
+  if (!notes[hostname]) return;
+
+  const noteIndex = notes[hostname].findIndex((n) => n.id === id);
+  if (noteIndex === -1) return;
+
+  notes[hostname][noteIndex] = {
+    ...notes[hostname][noteIndex],
+    title,
+    updatedAt: Date.now(),
+  };
 
   await setNotes(notes);
 }

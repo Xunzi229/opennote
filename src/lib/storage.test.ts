@@ -61,7 +61,7 @@ describe('storage utilities', () => {
 
   it('addNote creates a note with generated id and timestamps', async () => {
     const content = { type: 'doc', content: [] };
-    const note = await addNote('example.com', content);
+    const note = await addNote('example.com', content, 'Test Note');
 
     expect(note.id).toBeDefined();
     expect(note.content).toEqual(content);
@@ -70,7 +70,7 @@ describe('storage utilities', () => {
   });
 
   it('updateNote modifies existing note content', async () => {
-    const note = await addNote('example.com', { type: 'doc' });
+    const note = await addNote('example.com', { type: 'doc' }, 'Test Note');
     const newContent = { type: 'doc', content: [{ type: 'paragraph' }] };
 
     await updateNote('example.com', note.id, newContent);
@@ -80,7 +80,7 @@ describe('storage utilities', () => {
   });
 
   it('deleteNote removes a note from storage', async () => {
-    const note = await addNote('example.com', { type: 'doc' });
+    const note = await addNote('example.com', { type: 'doc' }, 'Test Note');
     await deleteNote('example.com', note.id);
 
     const notes = await getNotes();

@@ -6,6 +6,8 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [react()],
   build: {
+    // Increase warning threshold for extension bundle (TipTap + React is large)
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),

@@ -7,6 +7,7 @@ import {
   deleteNote as storageDeleteNote,
   onNotesChange,
 } from '../lib/storage';
+import { toast } from 'sonner';
 
 interface NotesState {
   notes: NotesStore;
@@ -56,7 +57,11 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       return note;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add note';
-      set({ error: message });
+      if (message.includes('QUOTA_BYTES')) {
+        toast.error('存储空间不足，请删除部分笔记');
+      } else {
+        set({ error: message });
+      }
       throw err;
     }
   },
@@ -68,7 +73,11 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       set({ notes });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update note';
-      set({ error: message });
+      if (message.includes('QUOTA_BYTES')) {
+        toast.error('存储空间不足，请删除部分笔记');
+      } else {
+        set({ error: message });
+      }
       throw err;
     }
   },

@@ -1,4 +1,4 @@
-import { NotesStore, MetaStore, Note } from '../types';
+import type { NotesStore, MetaStore, Note } from '../types';
 
 const NOTES_KEY = 'notes';
 const META_KEY = 'meta';
@@ -9,12 +9,12 @@ function generateId(): string {
 
 export async function getNotes(): Promise<NotesStore> {
   const result = await chrome.storage.local.get(NOTES_KEY);
-  return result[NOTES_KEY] || {};
+  return (result[NOTES_KEY] as NotesStore) || {};
 }
 
 export async function setNotes(notes: NotesStore): Promise<void> {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.set({ [NOTES_KEY]: notes }, () => {
+    chrome.storage.local.set({ [NOTES_KEY]: notes as any }, () => {
       if (chrome.runtime.lastError) {
         reject(chrome.runtime.lastError);
       } else {
@@ -26,7 +26,8 @@ export async function setNotes(notes: NotesStore): Promise<void> {
 
 export async function getMeta(): Promise<MetaStore> {
   const result = await chrome.storage.local.get(META_KEY);
-  return result[META_KEY] || { lastActiveSite: null, version: 1 };
+  const meta = result[META_KEY] as MetaStore | undefined;
+  return meta || { lastActiveSite: null, version: 1 };
 }
 
 export async function setMeta(meta: MetaStore): Promise<void> {
@@ -91,7 +92,7 @@ export async function deleteNote(hostname: string, id: string): Promise<void> {
 export function onNotesChange(callback: (notes: NotesStore) => void): () => void {
   const listener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
     if (changes[NOTES_KEY]) {
-      callback(changes[NOTES_KEY].newValue || {});
+      callback((changes[NOTES_KEY].newValue as NotesStore) || {});
     }
   };
   chrome.storage.onChanged.addListener(listener);

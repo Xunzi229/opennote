@@ -1,8 +1,7 @@
 import { create } from 'zustand';
-import { NotesStore, Note } from '../types';
+import type { NotesStore, Note } from '../types';
 import {
   getNotes,
-  setNotes,
   addNote as storageAddNote,
   updateNote as storageUpdateNote,
   deleteNote as storageDeleteNote,

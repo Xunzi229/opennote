@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "OpenNote",
+  "version": "1.0.0",
+  "description": "Website-specific notes in a right sidebar",
+  "permissions": ["storage", "contextMenus", "sidePanel", "activeTab", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "OpenNote"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "icons": {
+    "16": "icon-16.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  }
+}

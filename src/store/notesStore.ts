@@ -25,6 +25,7 @@ interface NotesState {
   loadNotes: () => Promise<void>;
   setCurrentSite: (site: string | null) => void;
   setSelectedNoteId: (id: string | null) => void;
+  selectNote: (site: string, noteId: string) => void;
   setNoteFilter: (filter: NoteFilter) => void;
   addNote: (site: string, content: any, title?: string) => Promise<Note>;
   updateNote: (site: string, id: string, content: any) => Promise<void>;
@@ -70,6 +71,10 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   setSelectedNoteId: (id) => {
     if (get().selectedNoteId === id) return;
     set({ selectedNoteId: id });
+  },
+
+  selectNote: (site, noteId) => {
+    set({ currentSite: site, selectedNoteId: noteId });
   },
 
   setNoteFilter: (filter) => {

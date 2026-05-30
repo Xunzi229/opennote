@@ -49,7 +49,7 @@ export default function NoteListPanel() {
     if (!activeSite) return;
 
     if (siteNotes.length === 0) {
-      setSelectedNoteId(null);
+      if (selectedNoteId) return;
       return;
     }
 
@@ -58,6 +58,7 @@ export default function NoteListPanel() {
       : false;
 
     if (!hasSelectedNote) {
+      if (selectedNoteId) return;
       setSelectedNoteId(siteNotes[0].id);
     }
   }, [activeSite, siteNoteIds, selectedNoteId, setSelectedNoteId]);

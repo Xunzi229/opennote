@@ -43,7 +43,7 @@ export default function EditorPanel() {
     if (selectedNote) {
       setEditorContent(contentToMarkdown(selectedNote.content));
     }
-  }, [selectedNote?.id]);
+  }, [selectedNote?.id, selectedNote?.updatedAt]);
 
   const debouncedSave = useCallback(
     (() => {
@@ -174,7 +174,7 @@ export default function EditorPanel() {
 
       <div className="flex-1 overflow-hidden p-4">
         <MarkdownEditor
-          key={selectedNote.id}
+          key={`${selectedNote.id}:${selectedNote.updatedAt}`}
           noteId={selectedNote.id}
           content={selectedNote.content}
           onUpdate={handleEditorUpdate}

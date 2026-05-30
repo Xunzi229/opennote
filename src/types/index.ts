@@ -16,6 +16,8 @@ export interface NotesStore {
 export interface MetaStore {
   lastActiveSite: string | null;
   version: number;
+  showSidebar?: boolean;
+  showNoteList?: boolean;
 }
 
 export type NoteFilter = 'all' | 'pinned' | 'tagged';

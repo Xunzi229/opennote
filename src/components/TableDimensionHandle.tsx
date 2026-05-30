@@ -12,6 +12,8 @@ interface TableLayout {
   left: number;
   width: number;
   height: number;
+  handleTop: number;
+  handleLeft: number;
   rows: number;
   cols: number;
   cellWidth: number;
@@ -28,6 +30,10 @@ export default function TableDimensionHandle({ editor, containerRef }: TableDime
   }, [layout]);
 
   useEffect(() => {
+    let observedTable: HTMLTableElement | null = null;
+    let observedWrapper: HTMLElement | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+
     const updateLayout = () => {
       const info = getActiveTable(editor);
       const container = containerRef.current;
@@ -44,14 +50,32 @@ export default function TableDimensionHandle({ editor, containerRef }: TableDime
         return;
       }
 
+      if (observedTable !== table) {
+        resizeObserver?.disconnect();
+        resizeObserver = new ResizeObserver(updateLayout);
+        resizeObserver.observe(table);
+        observedTable = table;
+      }
+
+      if (observedWrapper !== wrapper) {
+        observedWrapper?.removeEventListener('scroll', updateLayout);
+        wrapper.addEventListener('scroll', updateLayout);
+        observedWrapper = wrapper;
+      }
+
       const containerRect = container.getBoundingClientRect();
-      const wrapperRect = wrapper.getBoundingClientRect();
+      const tableRect = table.getBoundingClientRect();
+      const lastRow = table.querySelector('tr:last-child');
+      const lastCell = lastRow?.querySelector('th:last-child, td:last-child');
+      const anchorRect = lastCell?.getBoundingClientRect() ?? tableRect;
 
       setLayout({
-        top: wrapperRect.top - containerRect.top + container.scrollTop,
-        left: wrapperRect.left - containerRect.left + container.scrollLeft,
-        width: wrapperRect.width,
-        height: wrapperRect.height,
+        top: tableRect.top - containerRect.top + container.scrollTop,
+        left: tableRect.left - containerRect.left + container.scrollLeft,
+        width: tableRect.width,
+        height: tableRect.height,
+        handleTop: anchorRect.bottom - containerRect.top + container.scrollTop - 6,
+        handleLeft: anchorRect.right - containerRect.left + container.scrollLeft - 6,
         rows: info.rows,
         cols: info.cols,
         cellWidth: firstCell.getBoundingClientRect().width,
@@ -69,7 +93,9 @@ export default function TableDimensionHandle({ editor, containerRef }: TableDime
       editor.off('selectionUpdate', updateLayout);
       editor.off('transaction', updateLayout);
       containerRef.current?.removeEventListener('scroll', updateLayout);
+      observedWrapper?.removeEventListener('scroll', updateLayout);
       window.removeEventListener('resize', updateLayout);
+      resizeObserver?.disconnect();
     };
   }, [editor, containerRef]);
 
@@ -170,8 +196,8 @@ export default function TableDimensionHandle({ editor, containerRef }: TableDime
         className="table-dimension-handle pointer-events-auto"
         title="拖动调整表格行列"
         style={{
-          top: layout.top + layout.height - 6,
-          left: layout.left + layout.width - 6,
+          top: layout.handleTop,
+          left: layout.handleLeft,
         }}
         onMouseDown={startDrag}
       />

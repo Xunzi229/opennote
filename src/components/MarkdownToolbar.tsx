@@ -37,7 +37,7 @@ const TOOLBAR_ITEMS: {
 
 export default function MarkdownToolbar({ onInsert, onInsertTable }: MarkdownToolbarProps) {
   return (
-    <div className="flex items-center gap-1 flex-wrap px-3 py-2 border-b border-[var(--color-border)] bg-white">
+    <div className="flex items-center gap-1 flex-wrap px-3 py-2 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
       {TOOLBAR_ITEMS.slice(0, 8).map(({ type, label, icon: Icon }) => (
         <button
           key={type}

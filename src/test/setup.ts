@@ -5,11 +5,11 @@ import { vi } from 'vitest';
 vi.stubGlobal('chrome', {
   storage: {
     local: {
-      get: vi.fn((_keys: any, callback?: any) => {
+      get: vi.fn((_keys: string | string[] | object, callback?: (result: Record<string, unknown>) => void) => {
         if (callback) callback({});
         return Promise.resolve({});
       }),
-      set: vi.fn((_data: any, callback?: any) => {
+      set: vi.fn((_data: Record<string, unknown>, callback?: () => void) => {
         if (callback) callback();
         return Promise.resolve();
       }),

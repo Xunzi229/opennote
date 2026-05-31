@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNotesStore } from '../store/notesStore';
 import { useActiveSite } from '../hooks/useActiveSite';
 import MarkdownEditor from './MarkdownEditor';
@@ -10,7 +10,9 @@ import {
   Star,
   Pin,
   Tag,
+  X,
   MoreHorizontal,
+  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import PromptDialog from './PromptDialog';
@@ -27,6 +29,7 @@ export default function EditorPanel() {
     toggleNotePin,
     toggleNoteFavorite,
     addNoteTag,
+    removeNoteTag,
   } = useNotesStore();
 
   const actualCurrentSite = useActiveSite();
@@ -35,42 +38,44 @@ export default function EditorPanel() {
   const selectedNote = siteNotes.find((n) => n.id === selectedNoteId) || null;
 
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
-  const [editorContent, setEditorContent] = useState('');
+  const [draftContent, setDraftContent] = useState<{ noteId: string | null; content: string }>({
+    noteId: null,
+    content: '',
+  });
   const [showTagDialog, setShowTagDialog] = useState(false);
   const [tagInput, setTagInput] = useState('');
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (selectedNote) {
-      setEditorContent(contentToMarkdown(selectedNote.content));
-    }
-  }, [selectedNote?.id, selectedNote?.updatedAt]);
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
-  const debouncedSave = useCallback(
-    (() => {
-      let timeout: ReturnType<typeof setTimeout>;
-      return (site: string, id: string, content: string) => {
-        clearTimeout(timeout);
-        if (isContentEmpty(content)) {
-          setSaveStatus('saved');
-          return;
-        }
-        setSaveStatus('saving');
-        timeout = setTimeout(async () => {
-          try {
-            await updateNote(site, id, content);
-            setSaveStatus('saved');
-          } catch {
-            setSaveStatus('error');
-            toast.error('保存失败');
-          }
-        }, 2000);
-      };
-    })(),
-    [updateNote],
-  );
+  const debouncedSave = (site: string, id: string, content: string) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    if (isContentEmpty(content)) {
+      setSaveStatus('saved');
+      return;
+    }
+    setSaveStatus('saving');
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await updateNote(site, id, content);
+        setSaveStatus('saved');
+      } catch {
+        setSaveStatus('error');
+        toast.error('保存失败');
+      }
+    }, 2000);
+  };
 
   const handleEditorUpdate = (content: string) => {
-    setEditorContent(content);
+    setDraftContent({ noteId: selectedNote?.id ?? null, content });
     if (activeSite && selectedNote && !isContentEmpty(content)) {
       debouncedSave(activeSite, selectedNote.id, content);
     }
@@ -99,6 +104,12 @@ export default function EditorPanel() {
     setShowTagDialog(false);
     setTagInput('');
     toast.success('标签已添加');
+  };
+
+  const handleRemoveTag = async (tag: string) => {
+    if (!activeSite || !selectedNote) return;
+    await removeNoteTag(activeSite, selectedNote.id, tag);
+    toast.success('标签已移除');
   };
 
   const handleCreateFirstNote = async () => {
@@ -134,7 +145,9 @@ export default function EditorPanel() {
     );
   }
 
-  const stats = getNoteStats(editorContent || selectedNote.content);
+  const statsContent =
+    draftContent.noteId === selectedNote.id ? draftContent.content : contentToMarkdown(selectedNote.content);
+  const stats = getNoteStats(statsContent);
 
   return (
     <main className="panel panel-editor">
@@ -163,6 +176,19 @@ export default function EditorPanel() {
           <button className="btn btn-ghost btn-icon" title="更多">
             <MoreHorizontal className="w-4 h-4" />
           </button>
+          {(selectedNote.tags || []).map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => handleRemoveTag(tag)}
+              className="tag gap-1 hover:text-[var(--color-danger)]"
+              title={`移除标签：${tag}`}
+              aria-label={`移除标签：${tag}`}
+            >
+              <span>{tag}</span>
+              <X className="w-3 h-3" />
+            </button>
+          ))}
         </div>
 
         <div className="text-[12px] text-[var(--color-text-secondary)]">
@@ -181,8 +207,22 @@ export default function EditorPanel() {
         />
       </div>
 
-      <div className="px-5 py-2.5 border-t border-[var(--color-border)] flex items-center justify-between text-[12px] text-[var(--color-text-secondary)] bg-[#fafafa]">
-        <span>最后编辑 {formatRelativeTime(selectedNote.updatedAt)}</span>
+      <div className="px-5 py-2.5 border-t border-[var(--color-border)] flex items-center justify-between text-[12px] text-[var(--color-text-secondary)] bg-[var(--color-muted)]">
+        <div className="min-w-0 flex items-center gap-3">
+          <span className="shrink-0">最后编辑 {formatRelativeTime(selectedNote.updatedAt)}</span>
+          {selectedNote.source?.pageUrl && (
+            <a
+              href={selectedNote.source.pageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="min-w-0 inline-flex items-center gap-1 hover:text-[var(--color-primary-hover)]"
+              title={selectedNote.source.pageTitle || selectedNote.source.pageUrl}
+            >
+              <ExternalLink className="w-3 h-3 shrink-0" />
+              <span className="truncate">{selectedNote.source.pageTitle || selectedNote.source.hostname}</span>
+            </a>
+          )}
+        </div>
         <span>
           {stats.chars} 字 · {stats.lines} 行
         </span>

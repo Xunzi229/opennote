@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { NotesStore, Note, NoteFilter } from '../types';
+import type { NotesStore, Note, NoteFilter, NoteContent, NoteSource, NoteSortMode } from '../types';
 import {
   getNotes,
   addNote as storageAddNote,
@@ -19,6 +19,7 @@ interface NotesState {
   selectedNoteId: string | null;
   searchQuery: string;
   noteFilter: NoteFilter;
+  noteSortMode: NoteSortMode;
   isLoading: boolean;
   error: string | null;
 
@@ -27,13 +28,15 @@ interface NotesState {
   setSelectedNoteId: (id: string | null) => void;
   selectNote: (site: string, noteId: string) => void;
   setNoteFilter: (filter: NoteFilter) => void;
-  addNote: (site: string, content: any, title?: string) => Promise<Note>;
-  updateNote: (site: string, id: string, content: any) => Promise<void>;
+  cycleNoteSortMode: () => void;
+  addNote: (site: string, content: NoteContent, title?: string, source?: NoteSource) => Promise<Note>;
+  updateNote: (site: string, id: string, content: NoteContent) => Promise<void>;
   deleteNote: (site: string, id: string) => Promise<void>;
   updateNoteTitle: (site: string, id: string, title: string) => Promise<void>;
   toggleNotePin: (site: string, id: string) => Promise<void>;
   toggleNoteFavorite: (site: string, id: string) => Promise<void>;
   addNoteTag: (site: string, id: string, tag: string) => Promise<void>;
+  removeNoteTag: (site: string, id: string, tag: string) => Promise<void>;
   deleteSite: (site: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
   filteredSites: () => string[];
@@ -47,6 +50,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   selectedNoteId: null,
   searchQuery: '',
   noteFilter: 'all',
+  noteSortMode: 'updated',
   isLoading: false,
   error: null,
 
@@ -81,10 +85,16 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     set({ noteFilter: filter });
   },
 
-  addNote: async (site, content, title) => {
+  cycleNoteSortMode: () => {
+    const order: NoteSortMode[] = ['updated', 'created', 'title'];
+    const currentIndex = order.indexOf(get().noteSortMode);
+    set({ noteSortMode: order[(currentIndex + 1) % order.length] });
+  },
+
+  addNote: async (site, content, title, source) => {
     try {
       const noteTitle = title || '新笔记';
-	      const note = await storageAddNote(site, content, noteTitle);
+      const note = await storageAddNote(site, content, noteTitle, source);
       const notes = await getNotes();
       set({ notes });
       return note;
@@ -158,9 +168,20 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   addNoteTag: async (site, id, tag) => {
     const note = get().notes[site]?.find((n) => n.id === id);
     if (!note) return;
+    const normalizedTag = normalizeTag(tag);
+    if (!normalizedTag) return;
     const tags = [...(note.tags || [])];
-    if (tags.includes(tag)) return;
-    tags.push(tag);
+    if (tags.some((currentTag) => currentTag.toLowerCase() === normalizedTag.toLowerCase())) return;
+    tags.push(normalizedTag);
+    await storageUpdateNoteMeta(site, id, { tags });
+    const notes = await getNotes();
+    set({ notes });
+  },
+
+  removeNoteTag: async (site, id, tag) => {
+    const note = get().notes[site]?.find((n) => n.id === id);
+    if (!note?.tags?.includes(tag)) return;
+    const tags = note.tags.filter((currentTag) => currentTag !== tag);
     await storageUpdateNoteMeta(site, id, { tags });
     const notes = await getNotes();
     set({ notes });
@@ -205,6 +226,8 @@ export const useNotesStore = create<NotesState>((set, get) => ({
 
     if (noteFilter === 'pinned') {
       siteNotes = siteNotes.filter((note) => note.pinned);
+    } else if (noteFilter === 'favorite') {
+      siteNotes = siteNotes.filter((note) => note.favorite);
     } else if (noteFilter === 'tagged') {
       siteNotes = siteNotes.filter((note) => (note.tags?.length || 0) > 0);
     }
@@ -216,9 +239,12 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   },
 
   sortedNotes: (site) => {
+    const { noteSortMode } = get();
     const notes = get().filteredNotes(site);
     return [...notes].sort((a, b) => {
       if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+      if (noteSortMode === 'created') return b.createdAt - a.createdAt;
+      if (noteSortMode === 'title') return a.title.localeCompare(b.title);
       return b.updatedAt - a.updatedAt;
     });
   },
@@ -227,7 +253,18 @@ export const useNotesStore = create<NotesState>((set, get) => ({
 function noteMatchesQuery(note: Note, query: string): boolean {
   if (note.title.toLowerCase().includes(query)) return true;
   if ((note.tags || []).some((tag) => tag.toLowerCase().includes(query))) return true;
+  if (note.source && sourceMatchesQuery(note.source, query)) return true;
   return contentToMarkdown(note.content).toLowerCase().includes(query);
+}
+
+function sourceMatchesQuery(source: NoteSource, query: string): boolean {
+  return [source.pageTitle, source.pageUrl, source.hostname].some((value) =>
+    value?.toLowerCase().includes(query),
+  );
+}
+
+function normalizeTag(tag: string): string {
+  return tag.trim();
 }
 
 // Subscribe to storage changes for cross-panel sync

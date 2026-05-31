@@ -1,5 +1,6 @@
 import { addNote, getNotes, updateNote } from './storage';
 import { appendMarkdown } from './appendMarkdown';
+import type { NoteSource } from '../types';
 
 export interface PendingNoteSelect {
   site: string;
@@ -25,6 +26,7 @@ export async function saveSelectionAsNote(
   hostname: string,
   action: { action: 'create' | 'append'; noteId?: string },
   selection: CapturedSelection,
+  source?: NoteSource,
 ): Promise<string | null> {
   const content = resolveSelectionContent(selection);
   if (!content) return null;
@@ -38,6 +40,6 @@ export async function saveSelectionAsNote(
     }
   }
 
-  const note = await addNote(hostname, content, generateNoteTitle());
+  const note = await addNote(hostname, content, generateNoteTitle(), source);
   return note.id;
 }

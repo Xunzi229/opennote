@@ -6,10 +6,11 @@ vi.mock('./storage', () => ({
     'example.com': [{ id: 'note-1', title: 'Old', content: '已有内容', createdAt: 1, updatedAt: 1 }],
   })),
   updateNote: vi.fn(async () => {}),
-  addNote: vi.fn(async (_hostname, content, title) => ({
+  addNote: vi.fn(async (_hostname, content, title, source) => ({
     id: 'note-2',
     title,
     content,
+    source,
     createdAt: 2,
     updatedAt: 2,
   })),
@@ -40,5 +41,29 @@ describe('saveSelectionAsNote', () => {
 
     expect(noteId).toBe('note-2');
     expect(addNote).toHaveBeenCalled();
+  });
+
+  it('passes source context when creating a note from a selection', async () => {
+    const { addNote } = await import('./storage');
+    const source = {
+      pageUrl: 'https://example.com/article',
+      pageTitle: 'Example Article',
+      capturedAt: 123,
+      hostname: 'example.com',
+    };
+
+    await saveSelectionAsNote(
+      'example.com',
+      { action: 'create' },
+      { markdown: 'selected content' },
+      source,
+    );
+
+    expect(addNote).toHaveBeenLastCalledWith(
+      'example.com',
+      'selected content',
+      expect.any(String),
+      source,
+    );
   });
 });

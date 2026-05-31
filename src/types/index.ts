@@ -1,7 +1,17 @@
+export type NoteContent = string | Record<string, unknown>;
+
+export interface NoteSource {
+  pageUrl: string;
+  pageTitle?: string;
+  capturedAt: number;
+  hostname: string;
+}
+
 export interface Note {
   id: string;
   title: string;
-  content: string | Record<string, unknown>;
+  content: NoteContent;
+  source?: NoteSource;
   createdAt: number;
   updatedAt: number;
   pinned?: boolean;
@@ -20,4 +30,5 @@ export interface MetaStore {
   showNoteList?: boolean;
 }
 
-export type NoteFilter = 'all' | 'pinned' | 'tagged';
+export type NoteFilter = 'all' | 'pinned' | 'favorite' | 'tagged';
+export type NoteSortMode = 'updated' | 'created' | 'title';

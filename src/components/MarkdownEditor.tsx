@@ -60,8 +60,10 @@ export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: Ma
   const [viewMode, setViewMode] = useState<ViewMode>('live');
   const [markdownText, setMarkdownText] = useState(() => contentToMarkdown(content));
 
-  onUpdateRef.current = onUpdate;
-  onBlurRef.current = onBlur;
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+    onBlurRef.current = onBlur;
+  }, [onUpdate, onBlur]);
 
   const syncMarkdown = (text: string, fromExternal = false) => {
     markdownTextRef.current = text;
@@ -70,13 +72,6 @@ export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: Ma
       onUpdateRef.current(text);
     }
   };
-
-  useEffect(() => {
-    const text = contentToMarkdown(content);
-    markdownTextRef.current = text;
-    setMarkdownText(text);
-    setViewMode('live');
-  }, [noteId]);
 
   useEffect(() => {
     if (viewMode !== 'source' || !editorRef.current) return;
@@ -159,7 +154,7 @@ export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: Ma
 
   return (
     <div className="editor-shell flex flex-col h-full overflow-hidden">
-      <div className="border-b border-[var(--color-border)] bg-[#fafafa]">
+      <div className="border-b border-[var(--color-border)] bg-[var(--color-muted)]">
         <div className="flex items-center gap-2 px-3 py-2">
           <button type="button" onClick={() => setViewMode('source')} className={modeButtonClass('source')}>
             <Code2 className="w-3.5 h-3.5" />

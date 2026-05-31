@@ -86,13 +86,14 @@ export default function TableDimensionHandle({ editor, containerRef }: TableDime
     updateLayout();
     editor.on('selectionUpdate', updateLayout);
     editor.on('transaction', updateLayout);
-    containerRef.current?.addEventListener('scroll', updateLayout);
+    const container = containerRef.current;
+    container?.addEventListener('scroll', updateLayout);
     window.addEventListener('resize', updateLayout);
 
     return () => {
       editor.off('selectionUpdate', updateLayout);
       editor.off('transaction', updateLayout);
-      containerRef.current?.removeEventListener('scroll', updateLayout);
+      container?.removeEventListener('scroll', updateLayout);
       observedWrapper?.removeEventListener('scroll', updateLayout);
       window.removeEventListener('resize', updateLayout);
       resizeObserver?.disconnect();

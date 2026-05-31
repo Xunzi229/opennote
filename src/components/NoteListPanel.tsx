@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNotesStore } from '../store/notesStore';
 import { useActiveSite } from '../hooks/useActiveSite';
 import { getNoteExcerpt, formatRelativeTime } from '../lib/noteStats';
@@ -19,15 +19,15 @@ import type { Note, NoteFilter } from '../types';
 
 export default function NoteListPanel() {
   const {
-    notes,
     currentSite,
     setCurrentSite,
     selectedNoteId,
     setSelectedNoteId,
     sortedNotes,
     noteFilter,
-    searchQuery,
+    noteSortMode,
     setNoteFilter,
+    cycleNoteSortMode,
     addNote,
     updateNoteTitle,
     deleteNote,
@@ -39,29 +39,14 @@ export default function NoteListPanel() {
 
   const actualCurrentSite = useActiveSite();
   const activeSite = currentSite ?? actualCurrentSite;
-  const siteNotes = useMemo(
-    () => (activeSite ? sortedNotes(activeSite) : []),
-    [activeSite, notes, noteFilter, searchQuery, sortedNotes],
-  );
-  const siteNoteIds = useMemo(() => siteNotes.map((note) => note.id).join(','), [siteNotes]);
+  const siteNotes = activeSite ? sortedNotes(activeSite) : [];
+  const firstSiteNoteId = siteNotes[0]?.id ?? null;
 
   useEffect(() => {
     if (!activeSite) return;
-
-    if (siteNotes.length === 0) {
-      if (selectedNoteId) return;
-      return;
-    }
-
-    const hasSelectedNote = selectedNoteId
-      ? siteNotes.some((note) => note.id === selectedNoteId)
-      : false;
-
-    if (!hasSelectedNote) {
-      if (selectedNoteId) return;
-      setSelectedNoteId(siteNotes[0].id);
-    }
-  }, [activeSite, siteNoteIds, selectedNoteId, setSelectedNoteId]);
+    if (selectedNoteId || !firstSiteNoteId) return;
+    setSelectedNoteId(firstSiteNoteId);
+  }, [activeSite, firstSiteNoteId, selectedNoteId, setSelectedNoteId]);
 
   const ensureCurrentSite = (site: string) => {
     if (!currentSite) setCurrentSite(site);
@@ -131,8 +116,14 @@ export default function NoteListPanel() {
   const filters: { id: NoteFilter; label: string }[] = [
     { id: 'all', label: '全部' },
     { id: 'pinned', label: '置顶' },
+    { id: 'favorite', label: '收藏' },
     { id: 'tagged', label: '有标签' },
   ];
+  const sortLabelByMode = {
+    updated: '按更新',
+    created: '按创建',
+    title: '按标题',
+  } satisfies Record<typeof noteSortMode, string>;
 
   if (!activeSite) {
     return (
@@ -171,9 +162,14 @@ export default function NoteListPanel() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button className="btn btn-secondary flex-1" title="按更新时间排序">
+          <button
+            type="button"
+            onClick={cycleNoteSortMode}
+            className="btn btn-secondary flex-1"
+            title="切换排序"
+          >
             <ArrowUpDown className="w-3.5 h-3.5" />
-            按更新时间
+            {sortLabelByMode[noteSortMode]}
           </button>
           <div className="relative">
             <Filter className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)] pointer-events-none" />

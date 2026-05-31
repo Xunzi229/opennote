@@ -13,6 +13,16 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
       },
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('@tiptap') || id.includes('prosemirror')) return 'editor-tiptap';
+          if (id.includes('@codemirror') || id.includes('@lezer')) return 'editor-codemirror';
+          if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) return 'react';
+          if (id.includes('lucide-react') || id.includes('sonner') || id.includes('zustand')) return 'ui-vendor';
+          return 'vendor';
+        },
+      },
     },
   },
 })

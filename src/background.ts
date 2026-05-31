@@ -12,6 +12,7 @@ import {
   purgeLegacyContentScriptsFromOpenTabs,
   resetLegacyContentScriptPurgeFlag,
 } from './lib/purgeLegacyContentScripts';
+import type { NoteSource } from './types';
 
 function setupPanelBehavior() {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
@@ -31,6 +32,16 @@ function getHostname(url: string | undefined) {
   } catch {
     return null;
   }
+}
+
+function getNoteSource(tab: chrome.tabs.Tab, hostname: string): NoteSource | undefined {
+  if (!tab.url) return undefined;
+  return {
+    pageUrl: tab.url,
+    pageTitle: tab.title,
+    capturedAt: Date.now(),
+    hostname,
+  };
 }
 
 async function captureSelectionFromTab(tabId: number): Promise<CapturedSelection | null> {
@@ -112,7 +123,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
     if (!selection?.text && !selection?.html && !selection?.markdown) return;
 
-    const noteId = await saveSelectionAsNote(hostname, action, selection);
+    const noteId = await saveSelectionAsNote(hostname, action, selection, getNoteSource(tab, hostname));
     if (!noteId) return;
 
     await chrome.storage.session.set({

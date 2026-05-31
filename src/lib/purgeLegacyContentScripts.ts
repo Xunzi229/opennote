@@ -67,7 +67,8 @@ export async function resetLegacyContentScriptPurgeFlag() {
   await chrome.storage.session.remove(PURGE_SESSION_KEY);
 }
 
-export async function ensureTabLegacyScriptsPurged(_tabId: number): Promise<boolean> {
+export async function ensureTabLegacyScriptsPurged(tabId: number): Promise<boolean> {
+  void tabId;
   await purgeLegacyContentScriptsFromOpenTabs();
   return true;
 }

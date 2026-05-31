@@ -1,10 +1,10 @@
-import { addNote, getNotes, updateNote } from './storage';
+import { addPage, getWorkspace, updatePageContent } from './storage';
 import { appendMarkdown } from './appendMarkdown';
 import type { NoteSource } from '../types';
 
 export interface PendingNoteSelect {
   site: string;
-  noteId: string;
+  pageId: string;
 }
 
 export interface CapturedSelection {
@@ -13,33 +13,39 @@ export interface CapturedSelection {
   markdown?: string;
 }
 
-function generateNoteTitle() {
+function generatePageTitle() {
   const now = new Date();
-  return `${now.getMonth() + 1}/${now.getDate()} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} 新笔记`;
+  return `${now.getMonth() + 1}/${now.getDate()} ${now
+    .getHours()
+    .toString()
+    .padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} 新页面`;
 }
 
 function resolveSelectionContent(selection: CapturedSelection) {
   return selection.markdown?.trim() || selection.text?.trim() || '';
 }
 
-export async function saveSelectionAsNote(
+export async function saveSelectionAsPage(
   hostname: string,
-  action: { action: 'create' | 'append'; noteId?: string },
+  action: { action: 'create' | 'append'; noteId?: string; pageId?: string },
   selection: CapturedSelection,
   source?: NoteSource,
 ): Promise<string | null> {
   const content = resolveSelectionContent(selection);
   if (!content) return null;
 
-  if (action.action === 'append' && action.noteId) {
-    const notes = await getNotes();
-    const existing = notes[hostname]?.find((note) => note.id === action.noteId);
-    if (existing) {
-      await updateNote(hostname, action.noteId, appendMarkdown(existing.content, content));
-      return action.noteId;
+  const targetId = action.pageId ?? action.noteId;
+  if (action.action === 'append' && targetId) {
+    const workspace = await getWorkspace();
+    const existing = workspace.pages[targetId];
+    if (existing?.site === hostname) {
+      await updatePageContent(targetId, appendMarkdown(existing.content, content));
+      return targetId;
     }
   }
 
-  const note = await addNote(hostname, content, generateNoteTitle(), source);
-  return note.id;
+  const page = await addPage(hostname, null, content, generatePageTitle(), source);
+  return page.id;
 }
+
+export const saveSelectionAsNote = saveSelectionAsPage;

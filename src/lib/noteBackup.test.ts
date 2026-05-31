@@ -1,84 +1,80 @@
 import { describe, expect, it } from 'vitest';
-import { parseNotesBackup, serializeNotesBackup, serializeNotesMarkdown } from './noteBackup';
-import type { NotesStore } from '../types';
+import {
+  parseWorkspaceBackup,
+  serializeWorkspaceBackup,
+  serializeWorkspaceMarkdown,
+} from './noteBackup';
+import type { WorkspaceStore } from '../types';
 
-describe('note backup helpers', () => {
-  it('serializes notes with a stable backup format', () => {
-    const notes: NotesStore = {
-      'example.com': [
-        {
-          id: 'note-1',
-          title: 'Example',
-          content: 'hello',
-          createdAt: 1,
-          updatedAt: 2,
-        },
-      ],
-    };
+const workspace: WorkspaceStore = {
+  rootIds: ['site:example.com'],
+  pages: {
+    'site:example.com': {
+      id: 'site:example.com',
+      type: 'site',
+      site: 'example.com',
+      parentId: null,
+      title: 'example.com',
+      content: '',
+      sortIndex: 0,
+      createdAt: 1,
+      updatedAt: 2,
+    },
+    'page-1': {
+      id: 'page-1',
+      type: 'page',
+      site: 'example.com',
+      parentId: 'site:example.com',
+      title: 'Example Note',
+      content: 'hello markdown',
+      sortIndex: 0,
+      createdAt: Date.UTC(2026, 4, 31),
+      updatedAt: Date.UTC(2026, 4, 31, 1),
+      tags: ['docs', 'web'],
+      source: {
+        pageUrl: 'https://example.com/article',
+        pageTitle: 'Example Article',
+        capturedAt: Date.UTC(2026, 4, 31, 2),
+        hostname: 'example.com',
+      },
+    },
+  },
+};
 
-    const json = serializeNotesBackup(notes, 123);
+describe('workspace backup helpers', () => {
+  it('serializes workspace with a stable backup format', () => {
+    const json = serializeWorkspaceBackup(workspace, 123);
     const backup = JSON.parse(json);
 
     expect(backup).toEqual({
-      format: 'opennote.notes.v1',
+      format: 'opennote.workspace.v1',
       exportedAt: 123,
-      notes,
+      workspace,
     });
   });
 
-  it('parses a valid notes backup', () => {
-    const notes: NotesStore = {
-      'example.com': [
-        {
-          id: 'note-1',
-          title: 'Example',
-          content: 'hello',
-          createdAt: 1,
-          updatedAt: 2,
-        },
-      ],
-    };
-
-    const parsed = parseNotesBackup(JSON.stringify({
-      format: 'opennote.notes.v1',
+  it('parses a valid workspace backup', () => {
+    const parsed = parseWorkspaceBackup(JSON.stringify({
+      format: 'opennote.workspace.v1',
       exportedAt: 123,
-      notes,
+      workspace,
     }));
 
-    expect(parsed).toEqual(notes);
+    expect(parsed).toEqual(workspace);
   });
 
   it('rejects invalid backup content', () => {
-    expect(() => parseNotesBackup('not json')).toThrow('备份文件不是有效 JSON');
-    expect(() => parseNotesBackup(JSON.stringify({ format: 'other', notes: {} }))).toThrow(
+    expect(() => parseWorkspaceBackup('not json')).toThrow('备份文件不是有效 JSON');
+    expect(() => parseWorkspaceBackup(JSON.stringify({ format: 'other', workspace }))).toThrow(
       '备份格式不受支持',
     );
-    expect(() => parseNotesBackup(JSON.stringify({ format: 'opennote.notes.v1', notes: [] }))).toThrow(
-      '备份文件缺少有效笔记数据',
+    expect(() => parseWorkspaceBackup(JSON.stringify({ format: 'opennote.workspace.v1', workspace: [] }))).toThrow(
+      '备份文件缺少有效工作区数据',
     );
   });
 
-  it('serializes notes to a readable markdown document', () => {
-    const notes: NotesStore = {
-      'example.com': [
-        {
-          id: 'note-1',
-          title: 'Example Note',
-          content: 'hello markdown',
-          createdAt: Date.UTC(2026, 4, 31),
-          updatedAt: Date.UTC(2026, 4, 31, 1),
-          tags: ['docs', 'web'],
-          source: {
-            pageUrl: 'https://example.com/article',
-            pageTitle: 'Example Article',
-            capturedAt: Date.UTC(2026, 4, 31, 2),
-            hostname: 'example.com',
-          },
-        },
-      ],
-    };
-
-    const markdown = serializeNotesMarkdown(notes, Date.UTC(2026, 4, 31, 3));
+  it('serializes workspace to a readable markdown document', () => {
+    const markdown = serializeWorkspaceMarkdown(workspace, Date.UTC(2026, 4, 31, 3));
 
     expect(markdown).toContain('# OpenNote Export');
     expect(markdown).toContain('Exported at: 2026-05-31');

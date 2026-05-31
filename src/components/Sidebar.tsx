@@ -1,32 +1,76 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNotesStore } from '../store/notesStore';
-import SiteItem from './SiteItem';
+import { useActiveSite } from '../hooks/useActiveSite';
 import ConfirmDialog from './ConfirmDialog';
-import { Download, FileText, Search, Plus, Trash2, Upload } from 'lucide-react';
+import {
+  ArrowUpDown,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileText,
+  Filter,
+  Globe2,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  exportNotesBackup,
-  exportNotesMarkdown,
-  getNotesStorageUsage,
-  importNotesBackup,
+  exportWorkspaceBackup,
+  exportWorkspaceMarkdown,
+  getWorkspaceStorageUsage,
+  importWorkspaceBackup,
+  siteRootId,
   type StorageUsage,
 } from '../lib/storage';
 import { normalizeSiteInput } from '../lib/siteInput';
+import { getSiteFaviconUrl } from '../lib/favicon';
+import type { PageFilter, PageNode } from '../types';
+import PromptDialog from './PromptDialog';
 
 export default function Sidebar() {
-  const { notes, searchQuery, setSearchQuery, currentSite, setCurrentSite, deleteSite, filteredSites, loadNotes } =
-    useNotesStore();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [siteToDelete, setSiteToDelete] = useState<string | null>(null);
-  const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
-  const importInputRef = useRef<HTMLInputElement>(null);
+  const {
+    workspace,
+    searchQuery,
+    setSearchQuery,
+    selectedPageId,
+    pageFilter,
+    pageSortMode,
+    setPageFilter,
+    cyclePageSortMode,
+    addPage,
+    updatePageTitle,
+    deletePage,
+    deleteSite,
+    movePage,
+    togglePageCollapsed,
+    selectPage,
+    visibleTreeRows,
+    ensureSiteRoot,
+    currentSite,
+    loadWorkspace,
+  } = useNotesStore();
 
-  const filteredHostnames = filteredSites();
+  const actualCurrentSite = useActiveSite();
+  const activeSite = currentSite ?? actualCurrentSite;
+  const activeSiteRoot = activeSite ? workspace.pages[siteRootId(activeSite)] : undefined;
+  const shouldOfferCurrentSiteCreate = Boolean(activeSite && !activeSiteRoot);
+  const rows = visibleTreeRows();
+  const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editingTitleValue, setEditingTitleValue] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<PageNode | null>(null);
+  const [siteToDelete, setSiteToDelete] = useState<string | null>(null);
+  const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
+  const [showAddSiteDialog, setShowAddSiteDialog] = useState(false);
+  const [addSiteInput, setAddSiteInput] = useState('');
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    void getNotesStorageUsage()
+    void getWorkspaceStorageUsage()
       .then((usage) => {
         if (!cancelled) setStorageUsage(usage);
       })
@@ -37,31 +81,82 @@ export default function Sidebar() {
     return () => {
       cancelled = true;
     };
-  }, [notes]);
+  }, [workspace]);
 
-  const handleAddSite = () => {
-    const input = prompt('输入网站域名或 URL（如 example.com）:');
-    if (!input) return;
-    const hostname = normalizeSiteInput(input);
-    if (hostname) {
-      setCurrentSite(hostname);
-    } else {
+  const handleCreateCurrentSitePage = async () => {
+    if (!activeSite) return;
+    const root = await ensureSiteRoot(activeSite);
+    await addPage(activeSite, root.id);
+  };
+
+  const handleCreateChildPage = async (parent: PageNode, event: React.MouseEvent) => {
+    event.stopPropagation();
+    await addPage(parent.site, parent.id);
+  };
+
+  const handleOpenAddSite = () => {
+    setAddSiteInput('');
+    setShowAddSiteDialog(true);
+  };
+
+  const handleConfirmAddSite = async () => {
+    const hostname = normalizeSiteInput(addSiteInput);
+    if (!hostname) {
       toast.error('请输入有效的网站域名或 URL');
+      return;
+    }
+    const root = await ensureSiteRoot(hostname);
+    selectPage(root.id);
+    setShowAddSiteDialog(false);
+    setAddSiteInput('');
+  };
+
+  const handleSelectCurrentSite = async () => {
+    if (!actualCurrentSite) return;
+    const root = await ensureSiteRoot(actualCurrentSite);
+    selectPage(root.id);
+  };
+
+  const handleStartEditTitle = (page: PageNode, event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (page.type === 'site') return;
+    setEditingTitleId(page.id);
+    setEditingTitleValue(page.title);
+  };
+
+  const handleSaveTitle = async (pageId: string) => {
+    if (!editingTitleValue.trim()) {
+      setEditingTitleId(null);
+      return;
+    }
+
+    try {
+      await updatePageTitle(pageId, editingTitleValue.trim());
+      setEditingTitleId(null);
+    } catch {
+      toast.error('更新标题失败');
     }
   };
 
-  const handleDeleteSite = (hostname: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSiteToDelete(hostname);
-    setShowDeleteConfirm(true);
+  const canDropOn = (target: PageNode) => {
+    if (!draggedPageId || draggedPageId === target.id) return false;
+    const dragged = useNotesStore.getState().getPage(draggedPageId);
+    if (!dragged || dragged.type === 'site') return false;
+
+    let current: PageNode | null = target;
+    while (current) {
+      if (current.id === dragged.id) return false;
+      current = current.parentId ? useNotesStore.getState().getPage(current.parentId) : null;
+    }
+    return true;
   };
 
-  const handleExportNotes = async () => {
+  const handleExportWorkspace = async () => {
     try {
-      const json = await exportNotesBackup();
+      const json = await exportWorkspaceBackup();
       const date = new Date().toISOString().slice(0, 10);
-      downloadTextFile(json, `opennote-backup-${date}.json`, 'application/json');
-      toast.success('笔记已导出');
+      downloadTextFile(json, `opennote-workspace-${date}.json`, 'application/json');
+      toast.success('工作区已导出');
     } catch {
       toast.error('导出失败');
     }
@@ -69,17 +164,13 @@ export default function Sidebar() {
 
   const handleExportMarkdown = async () => {
     try {
-      const markdown = await exportNotesMarkdown();
+      const markdown = await exportWorkspaceMarkdown();
       const date = new Date().toISOString().slice(0, 10);
-      downloadTextFile(markdown, `opennote-notes-${date}.md`, 'text/markdown');
+      downloadTextFile(markdown, `opennote-workspace-${date}.md`, 'text/markdown');
       toast.success('Markdown 已导出');
     } catch {
       toast.error('Markdown 导出失败');
     }
-  };
-
-  const handleImportClick = () => {
-    importInputRef.current?.click();
   };
 
   const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,18 +178,29 @@ export default function Sidebar() {
     event.target.value = '';
     if (!file) return;
 
-    const confirmed = window.confirm('导入备份会替换当前所有本地笔记，确定继续吗？');
+    const confirmed = window.confirm('导入备份会替换当前所有本地页面，确定继续吗？');
     if (!confirmed) return;
 
     try {
-      await importNotesBackup(await file.text());
-      await loadNotes();
-      toast.success('笔记已导入');
+      await importWorkspaceBackup(await file.text());
+      await loadWorkspace();
+      toast.success('工作区已导入');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '导入失败');
     }
   };
 
+  const filters: { id: PageFilter; label: string }[] = [
+    { id: 'all', label: '全部' },
+    { id: 'pinned', label: '置顶' },
+    { id: 'favorite', label: '收藏' },
+    { id: 'tagged', label: '有标签' },
+  ];
+  const sortLabelByMode = {
+    updated: '手动/更新',
+    created: '按创建',
+    title: '按标题',
+  } satisfies Record<typeof pageSortMode, string>;
   const usageText = storageUsage ? formatStorageUsage(storageUsage) : null;
 
   return (
@@ -107,57 +209,233 @@ export default function Sidebar() {
         <div className="panel-header">
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="OpenNote" className="logo-mark" />
-            <div>
+            <div className="min-w-0 flex-1">
               <h1 className="text-[15px] font-semibold text-[var(--color-text)] leading-none">OpenNote</h1>
-              <p className="text-[12px] text-[var(--color-text-secondary)] mt-1">网站笔记</p>
+              <p className="text-[12px] text-[var(--color-text-secondary)] mt-1">全局工作区</p>
             </div>
+            {actualCurrentSite && actualCurrentSite !== currentSite && (
+              <button
+                type="button"
+                onClick={handleSelectCurrentSite}
+                className="btn btn-ghost btn-icon"
+                title={`定位到 ${actualCurrentSite}`}
+              >
+                <Globe2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="panel-section">
+        <div className="panel-section space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94a3b8]" />
             <input
               type="text"
-              placeholder="搜索网站或笔记..."
+              placeholder="搜索站点或页面..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(event) => setSearchQuery(event.target.value)}
               className="input-field"
             />
           </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={cyclePageSortMode}
+              className="btn btn-secondary flex-1"
+              title="切换排序"
+            >
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              {sortLabelByMode[pageSortMode]}
+            </button>
+            <div className="relative">
+              <Filter className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)] pointer-events-none" />
+              <select
+                value={pageFilter}
+                onChange={(event) => setPageFilter(event.target.value as PageFilter)}
+                className="input-field !pl-8 !pr-8 !w-[108px] appearance-none cursor-pointer"
+              >
+                {filters.map((filter) => (
+                  <option key={filter.id} value={filter.id}>
+                    {filter.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {shouldOfferCurrentSiteCreate && activeSite && (
+            <div className="rounded-[8px] border border-[var(--color-border)] bg-[var(--color-muted)] p-3">
+              <div className="flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)] mb-2">
+                <Globe2 className="w-3.5 h-3.5" />
+                <span className="min-w-0 truncate">当前站点：{activeSite}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleCreateCurrentSitePage}
+                className="btn btn-secondary w-full"
+              >
+                <Plus className="w-4 h-4" />
+                在当前站点新建页面
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 pb-2">
-          {filteredHostnames.length === 0 ? (
+          {rows.length === 0 ? (
             <div className="empty-state">
-              <p className="text-[13px]">{searchQuery ? '没有匹配的网站' : '还没有笔记'}</p>
+              <p className="text-[13px]">{searchQuery ? '没有匹配的页面' : '还没有页面'}</p>
             </div>
           ) : (
-            filteredHostnames.map((hostname) => (
-              <div key={hostname} className="group flex items-center mb-1">
-                <div className="flex-1 min-w-0">
-                  <SiteItem
-                    hostname={hostname}
-                    noteCount={notes[hostname]?.length || 0}
-                    isActive={currentSite === hostname}
-                    onClick={() => setCurrentSite(hostname)}
-                  />
-                </div>
-                <button
-                  onClick={(e) => handleDeleteSite(hostname, e)}
-                  className="opacity-0 group-hover:opacity-100 btn btn-ghost btn-icon ml-1 text-[var(--color-danger)]"
-                  title="删除网站及所有笔记"
+            rows.map(({ page, depth, hasChildren }) => {
+              const isActive = selectedPageId === page.id;
+              const canRename = page.type === 'page';
+              const paddingLeft = 8 + depth * 16;
+              return (
+                <div
+                  key={page.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => selectPage(page.id)}
+                  draggable={page.type === 'page'}
+                  onDragStart={(event) => {
+                    if (page.type === 'site') return;
+                    setDraggedPageId(page.id);
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', page.id);
+                  }}
+                  onDragEnd={() => setDraggedPageId(null)}
+                  onDragOver={(event) => {
+                    if (!canDropOn(page)) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                  }}
+                  onDrop={async (event) => {
+                    event.preventDefault();
+                    const sourceId = draggedPageId ?? event.dataTransfer.getData('text/plain');
+                    const canDrop = canDropOn(page);
+                    setDraggedPageId(null);
+                    if (!sourceId || !canDrop) return;
+                    await movePage(sourceId, page.id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      selectPage(page.id);
+                    }
+                  }}
+                  className={`group flex items-center gap-1.5 h-8 rounded-[8px] px-2 mb-0.5 cursor-pointer transition-colors ${
+                    isActive
+                      ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary-hover)]'
+                      : canDropOn(page)
+                        ? 'bg-[var(--color-muted)] text-[var(--color-text)]'
+                        : 'hover:bg-[var(--color-muted)] text-[var(--color-text)]'
+                  }`}
+                  style={{ paddingLeft }}
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (hasChildren) void togglePageCollapsed(page.id);
+                    }}
+                    className="w-5 h-5 shrink-0 inline-flex items-center justify-center rounded hover:bg-white/70"
+                    aria-label={page.collapsed ? '展开' : '折叠'}
+                  >
+                    {hasChildren ? (
+                      page.collapsed ? (
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      )
+                    ) : (
+                      <span className="w-3.5" />
+                    )}
+                  </button>
+
+                  {page.type === 'site' ? (
+                    <img
+                      src={getSiteFaviconUrl(page.site, 24)}
+                      alt=""
+                      className="w-4 h-4 rounded-[4px] object-contain shrink-0"
+                    />
+                  ) : (
+                    <FileText className="w-4 h-4 shrink-0 text-[var(--color-text-secondary)]" />
+                  )}
+
+                  {editingTitleId === page.id ? (
+                    <input
+                      value={editingTitleValue}
+                      onChange={(event) => setEditingTitleValue(event.target.value)}
+                      onBlur={() => handleSaveTitle(page.id)}
+                      onKeyDown={(event) => {
+                        event.stopPropagation();
+                        if (event.key === 'Enter') void handleSaveTitle(page.id);
+                        if (event.key === 'Escape') setEditingTitleId(null);
+                      }}
+                      onClick={(event) => event.stopPropagation()}
+                      className="min-w-0 flex-1 bg-transparent border-b border-[var(--color-primary)] text-[13px] outline-none"
+                      autoFocus
+                    />
+                  ) : (
+                    <span
+                      onDoubleClick={(event) => handleStartEditTitle(page, event)}
+                      className={`min-w-0 flex-1 truncate text-[13px] ${canRename ? 'cursor-text' : ''}`}
+                      title={canRename ? '双击重命名' : page.site}
+                    >
+                      {page.title}
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={(event) => handleCreateChildPage(page, event)}
+                    className="opacity-0 group-hover:opacity-100 btn btn-ghost btn-icon !w-6 !h-6 text-[var(--color-primary-hover)]"
+                    title="在此节点下新建页面"
+                    aria-label={`在 ${page.title} 下新建页面`}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+
+                  {page.type === 'page' && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDeleteTarget(page);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 btn btn-ghost btn-icon !w-6 !h-6 text-[var(--color-danger)]"
+                      title="删除页面"
+                      aria-label="删除页面"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  {page.type === 'site' && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSiteToDelete(page.site);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 btn btn-ghost btn-icon !w-6 !h-6 text-[var(--color-danger)]"
+                      title="删除站点"
+                      aria-label="删除站点"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
 
         <div className="panel-footer">
           <div className="grid grid-cols-3 gap-2 mb-2">
-            <button onClick={handleExportNotes} className="btn btn-secondary w-full !px-2" title="导出 JSON 备份">
+            <button onClick={handleExportWorkspace} className="btn btn-secondary w-full !px-2" title="导出 JSON 备份">
               <Download className="w-4 h-4" />
               JSON
             </button>
@@ -165,7 +443,11 @@ export default function Sidebar() {
               <FileText className="w-4 h-4" />
               MD
             </button>
-            <button onClick={handleImportClick} className="btn btn-secondary w-full !px-2" title="导入 JSON 备份">
+            <button
+              onClick={() => importInputRef.current?.click()}
+              className="btn btn-secondary w-full !px-2"
+              title="导入 JSON 备份"
+            >
               <Upload className="w-4 h-4" />
               导入
             </button>
@@ -182,31 +464,58 @@ export default function Sidebar() {
               本地已用 {usageText}
             </div>
           )}
-          <button onClick={handleAddSite} className="btn btn-secondary w-full">
+          <button onClick={handleOpenAddSite} className="btn btn-secondary w-full">
             <Plus className="w-4 h-4" />
-            添加网站
+            添加站点
           </button>
         </div>
       </aside>
 
       <ConfirmDialog
-        isOpen={showDeleteConfirm}
-        title="删除网站"
-        message={`确定要删除网站 "${siteToDelete}" 及其所有笔记吗？此操作无法撤销。`}
+        isOpen={Boolean(deleteTarget)}
+        title="删除页面"
+        message={`确定删除「${deleteTarget?.title ?? '这个页面'}」及其所有子页面吗？此操作不可恢复。`}
         confirmText="删除"
         cancelText="取消"
+        danger
         onConfirm={async () => {
-          if (siteToDelete) {
-            await deleteSite(siteToDelete);
-            setShowDeleteConfirm(false);
-            setSiteToDelete(null);
-          }
+          if (!deleteTarget) return;
+          await deletePage(deleteTarget.id);
+          setDeleteTarget(null);
+          toast.success('页面已删除');
         }}
-        onCancel={() => {
-          setShowDeleteConfirm(false);
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={Boolean(siteToDelete)}
+        title="删除站点"
+        message={`确定要删除站点 "${siteToDelete}" 及其所有页面吗？此操作无法撤销。`}
+        confirmText="删除"
+        cancelText="取消"
+        danger
+        onConfirm={async () => {
+          if (!siteToDelete) return;
+          await deleteSite(siteToDelete);
           setSiteToDelete(null);
         }}
-        danger
+        onCancel={() => setSiteToDelete(null)}
+      />
+
+      <PromptDialog
+        isOpen={showAddSiteDialog}
+        title="添加站点"
+        label="网站域名或 URL"
+        placeholder="example.com 或 https://example.com"
+        value={addSiteInput}
+        confirmText="添加"
+        cancelText="取消"
+        onChange={setAddSiteInput}
+        onConfirm={handleConfirmAddSite}
+        onCancel={() => {
+          setShowAddSiteDialog(false);
+          setAddSiteInput('');
+        }}
       />
     </>
   );

@@ -1,25 +1,25 @@
-import type { Note, NotesStore } from '../types';
+import type { PageNode, WorkspaceStore } from '../types';
 import { contentToMarkdown } from './markdownContent';
 
-const BACKUP_FORMAT = 'opennote.notes.v1';
+const BACKUP_FORMAT = 'opennote.workspace.v1';
 
-interface NotesBackup {
+interface WorkspaceBackup {
   format: typeof BACKUP_FORMAT;
   exportedAt: number;
-  notes: NotesStore;
+  workspace: WorkspaceStore;
 }
 
-export function serializeNotesBackup(notes: NotesStore, exportedAt = Date.now()): string {
-  const backup: NotesBackup = {
+export function serializeWorkspaceBackup(workspace: WorkspaceStore, exportedAt = Date.now()): string {
+  const backup: WorkspaceBackup = {
     format: BACKUP_FORMAT,
     exportedAt,
-    notes,
+    workspace,
   };
 
   return JSON.stringify(backup, null, 2);
 }
 
-export function parseNotesBackup(json: string): NotesStore {
+export function parseWorkspaceBackup(json: string): WorkspaceStore {
   let parsed: unknown;
 
   try {
@@ -32,57 +32,76 @@ export function parseNotesBackup(json: string): NotesStore {
     throw new Error('备份格式不受支持');
   }
 
-  if (!isNotesStore(parsed.notes)) {
-    throw new Error('备份文件缺少有效笔记数据');
+  if (!isWorkspaceStore(parsed.workspace)) {
+    throw new Error('备份文件缺少有效工作区数据');
   }
 
-  return parsed.notes;
+  return parsed.workspace;
 }
 
-export function serializeNotesMarkdown(notes: NotesStore, exportedAt = Date.now()): string {
+export function serializeWorkspaceMarkdown(workspace: WorkspaceStore, exportedAt = Date.now()): string {
   const lines = ['# OpenNote Export', '', `Exported at: ${formatDate(exportedAt)}`, ''];
 
-  for (const hostname of Object.keys(notes).sort()) {
-    lines.push(`## ${hostname}`, '');
-
-    const siteNotes = [...(notes[hostname] || [])].sort((a, b) => b.updatedAt - a.updatedAt);
-    for (const note of siteNotes) {
-      lines.push(`### ${note.title.trim() || 'Untitled'}`, '');
-      lines.push(`- Created: ${formatDate(note.createdAt)}`);
-      lines.push(`- Updated: ${formatDate(note.updatedAt)}`);
-
-      if (note.tags?.length) {
-        lines.push(`- Tags: ${note.tags.join(', ')}`);
-      }
-
-      if (note.source?.pageUrl) {
-        const label = note.source.pageTitle?.trim() || note.source.pageUrl;
-        lines.push(`- Source: [${escapeMarkdownLinkText(label)}](${note.source.pageUrl})`);
-      }
-
-      const content = contentToMarkdown(note.content).trim();
-      lines.push('', content || '_No content_', '');
-    }
+  for (const rootId of workspace.rootIds) {
+    const root = workspace.pages[rootId];
+    if (!root) continue;
+    writePageMarkdown(lines, workspace, root, 2);
   }
 
   return `${lines.join('\n').trim()}\n`;
 }
 
-function isNotesStore(value: unknown): value is NotesStore {
-  if (!isRecord(value) || Array.isArray(value)) return false;
+function writePageMarkdown(lines: string[], workspace: WorkspaceStore, page: PageNode, level: number) {
+  const heading = '#'.repeat(Math.min(level, 6));
+  lines.push(`${heading} ${page.title.trim() || 'Untitled'}`, '');
+  lines.push(`- Created: ${formatDate(page.createdAt)}`);
+  lines.push(`- Updated: ${formatDate(page.updatedAt)}`);
 
-  return Object.entries(value).every(([hostname, notes]) => {
-    return typeof hostname === 'string' && Array.isArray(notes) && notes.every(isNote);
-  });
+  if (page.tags?.length) {
+    lines.push(`- Tags: ${page.tags.join(', ')}`);
+  }
+
+  if (page.source?.pageUrl) {
+    const label = page.source.pageTitle?.trim() || page.source.pageUrl;
+    lines.push(`- Source: [${escapeMarkdownLinkText(label)}](${page.source.pageUrl})`);
+  }
+
+  const content = contentToMarkdown(page.content).trim();
+  if (content) {
+    lines.push('', content);
+  }
+  lines.push('');
+
+  for (const child of getSortedChildren(workspace, page.id)) {
+    writePageMarkdown(lines, workspace, child, level + 1);
+  }
 }
 
-function isNote(value: unknown): value is Note {
+function getSortedChildren(workspace: WorkspaceStore, parentId: string): PageNode[] {
+  return Object.values(workspace.pages)
+    .filter((page) => page.parentId === parentId)
+    .sort((a, b) => a.sortIndex - b.sortIndex || a.title.localeCompare(b.title));
+}
+
+function isWorkspaceStore(value: unknown): value is WorkspaceStore {
+  if (!isRecord(value) || !isRecord(value.pages) || !Array.isArray(value.rootIds)) return false;
+  return (
+    value.rootIds.every((id) => typeof id === 'string') &&
+    Object.values(value.pages).every(isPageNode)
+  );
+}
+
+function isPageNode(value: unknown): value is PageNode {
   if (!isRecord(value)) return false;
 
   return (
     typeof value.id === 'string' &&
+    (value.type === 'site' || value.type === 'page') &&
+    typeof value.site === 'string' &&
+    (typeof value.parentId === 'string' || value.parentId === null) &&
     typeof value.title === 'string' &&
     (typeof value.content === 'string' || isRecord(value.content)) &&
+    typeof value.sortIndex === 'number' &&
     typeof value.createdAt === 'number' &&
     typeof value.updatedAt === 'number'
   );
@@ -99,3 +118,7 @@ function formatDate(timestamp: number): string {
 function escapeMarkdownLinkText(text: string): string {
   return text.replace(/[[\]]/g, '\\$&');
 }
+
+export const serializeNotesBackup = serializeWorkspaceBackup;
+export const parseNotesBackup = parseWorkspaceBackup;
+export const serializeNotesMarkdown = serializeWorkspaceMarkdown;

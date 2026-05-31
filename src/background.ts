@@ -123,13 +123,13 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
     if (!selection?.text && !selection?.html && !selection?.markdown) return;
 
-    const noteId = await saveSelectionAsNote(hostname, action, selection, getNoteSource(tab, hostname));
-    if (!noteId) return;
+    const pageId = await saveSelectionAsNote(hostname, action, selection, getNoteSource(tab, hostname));
+    if (!pageId) return;
 
     await chrome.storage.session.set({
       pendingNoteSelect: {
         site: hostname,
-        noteId,
+        pageId,
       },
     });
 
@@ -137,7 +137,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       .sendMessage({
         type: 'opennote:pending-note-select',
         site: hostname,
-        noteId,
+        pageId,
       })
       .catch(() => {});
   })();

@@ -9,6 +9,7 @@ import {
   MAX_CONTEXT_MENU_NOTES,
 } from './contextMenuConstants';
 import type { Note } from '../types';
+import { siteRootId, WORKSPACE_KEY } from './storage';
 
 const dynamicMenuIds = new Set<string>();
 let lastBuiltMenuKey = '';
@@ -142,7 +143,11 @@ export async function refreshContextMenuForTab(tab: chrome.tabs.Tab | undefined)
       return;
     }
 
-    const siteNotes = sortSiteNotes(getCachedNotes()[hostname] || []).slice(0, MAX_CONTEXT_MENU_NOTES);
+    const workspace = getCachedNotes();
+    const rootId = siteRootId(hostname);
+    const siteNotes = sortSiteNotes(
+      Object.values(workspace.pages).filter((page) => page.parentId === rootId && page.type === 'page'),
+    ).slice(0, MAX_CONTEXT_MENU_NOTES);
     const menuKey = buildMenuKey(hostname, siteNotes);
     if (menuKey === lastBuiltMenuKey) return;
 
@@ -192,7 +197,7 @@ export function registerContextMenuRefreshListeners() {
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes.notes) return;
+    if (area !== 'local' || !changes[WORKSPACE_KEY]) return;
     invalidateContextMenuCache();
     refreshContextMenuForActiveTab();
   });

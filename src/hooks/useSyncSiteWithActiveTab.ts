@@ -7,7 +7,8 @@ export function useSyncSiteWithActiveTab() {
 
   useEffect(() => {
     const syncFromTab = (tab: chrome.tabs.Tab | undefined) => {
-      setCurrentSite(getHostnameFromUrl(tab?.url));
+      const hostname = getHostnameFromUrl(tab?.url);
+      setCurrentSite(hostname);
     };
 
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {

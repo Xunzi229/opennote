@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNotesStore } from '../store/notesStore';
 import type { PendingNoteSelect } from '../lib/contextMenuSave';
-import { getNotes } from '../lib/storage';
+import { getWorkspace } from '../lib/storage';
 import {
   isExtensionContextError,
   isExtensionContextValid,
@@ -19,11 +19,11 @@ async function consumePendingNoteSelect() {
   try {
     const result = await chrome.storage.session.get('pendingNoteSelect');
     const pending = result.pendingNoteSelect as PendingNoteSelect | undefined;
-    if (!pending?.site || !pending.noteId) return;
+    if (!pending?.site || !pending.pageId) return;
 
-    const notes = await getNotes();
-    useNotesStore.setState({ notes });
-    useNotesStore.getState().selectNote(pending.site, pending.noteId);
+    const workspace = await getWorkspace();
+    useNotesStore.setState({ workspace });
+    useNotesStore.getState().selectPage(pending.pageId);
     await chrome.storage.session.remove('pendingNoteSelect');
   } catch (error) {
     if (isExtensionContextError(error) || !isExtensionContextValid()) {
@@ -38,7 +38,7 @@ function isPendingNoteSelectMessage(message: unknown): message is PendingNoteSel
     message !== null &&
     (message as { type?: string }).type === PENDING_NOTE_SELECT_MESSAGE &&
     typeof (message as PendingNoteSelect).site === 'string' &&
-    typeof (message as PendingNoteSelect).noteId === 'string'
+    typeof (message as PendingNoteSelect).pageId === 'string'
   );
 }
 

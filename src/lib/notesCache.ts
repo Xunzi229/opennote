@@ -1,14 +1,14 @@
-import type { NotesStore } from '../types';
-import { getNotes } from './storage';
+import type { WorkspaceStore } from '../types';
+import { getWorkspace, WORKSPACE_KEY, createEmptyWorkspace } from './storage';
 
-let cache: NotesStore = {};
+let cache: WorkspaceStore = createEmptyWorkspace();
 let initialized = false;
 let initPromise: Promise<void> | null = null;
 
 export function initNotesCache() {
   if (!initPromise) {
-    initPromise = getNotes().then((notes) => {
-      cache = notes;
+    initPromise = getWorkspace().then((workspace) => {
+      cache = workspace;
       initialized = true;
     });
   }
@@ -19,13 +19,13 @@ export function bindNotesCacheSync() {
   void initNotesCache();
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes.notes) return;
-    cache = (changes.notes.newValue as NotesStore) || {};
+    if (area !== 'local' || !changes[WORKSPACE_KEY]) return;
+    cache = (changes[WORKSPACE_KEY].newValue as WorkspaceStore) || createEmptyWorkspace();
     initialized = true;
   });
 }
 
-export function getCachedNotes(): NotesStore {
+export function getCachedNotes(): WorkspaceStore {
   return cache;
 }
 

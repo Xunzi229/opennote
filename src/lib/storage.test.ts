@@ -1,22 +1,30 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  getNotes,
-  setNotes,
-  addNote,
-  updateNote,
-  deleteNote,
-  exportNotesBackup,
-  exportNotesMarkdown,
-  importNotesBackup,
-  getNotesStorageUsage,
+  addPage,
+  createEmptyWorkspace,
+  deletePage,
+  exportWorkspaceBackup,
+  exportWorkspaceMarkdown,
+  getWorkspace,
+  getWorkspaceStorageUsage,
+  importWorkspaceBackup,
+  movePage,
+  setWorkspace,
+  siteRootId,
+  updatePageContent,
+  updatePageTitle,
+  WORKSPACE_KEY,
 } from './storage';
 
-// Mock chrome.storage.local
 const mockStorage: Record<string, unknown> = {};
 
 beforeEach(() => {
-  mockStorage.notes = undefined;
+  mockStorage[WORKSPACE_KEY] = undefined;
   vi.clearAllMocks();
+});
+
+vi.stubGlobal('crypto', {
+  randomUUID: vi.fn(() => `page-${Math.random().toString(16).slice(2)}`),
 });
 
 vi.stubGlobal('chrome', {
@@ -27,30 +35,23 @@ vi.stubGlobal('chrome', {
         if (typeof keys === 'string') {
           result = { [keys]: mockStorage[keys] };
         } else if (Array.isArray(keys)) {
-          keys.forEach((k) => {
-            result[k] = mockStorage[k];
+          keys.forEach((key) => {
+            result[key] = mockStorage[key];
           });
         } else {
           result = mockStorage;
         }
-        if (callback) {
-          callback(result);
-        }
+        callback?.(result);
         return Promise.resolve(result);
       }),
       set: vi.fn((data: Record<string, unknown>, callback?: () => void) => {
         Object.assign(mockStorage, data);
-        if (callback) {
-          callback();
-        }
+        callback?.();
         return Promise.resolve();
       }),
       getBytesInUse: vi.fn((_keys: string | string[] | null, callback?: (bytes: number) => void) => {
-        const bytes = 2048;
-        if (callback) {
-          callback(bytes);
-        }
-        return Promise.resolve(bytes);
+        callback?.(2048);
+        return Promise.resolve(2048);
       }),
       QUOTA_BYTES: 10485760,
     },
@@ -64,94 +65,99 @@ vi.stubGlobal('chrome', {
   },
 });
 
-describe('storage utilities', () => {
-  it('getNotes returns empty object when no notes exist', async () => {
-    const notes = await getNotes();
-    expect(notes).toEqual({});
+describe('workspace storage utilities', () => {
+  it('returns an empty workspace when none exists', async () => {
+    await expect(getWorkspace()).resolves.toEqual(createEmptyWorkspace());
   });
 
-  it('setNotes and getNotes persist data', async () => {
-    const testNotes = { 'example.com': [] };
-    await setNotes(testNotes);
-    const notes = await getNotes();
-    expect(notes).toEqual(testNotes);
+  it('persists workspace data', async () => {
+    const workspace = { pages: {}, rootIds: [] };
+    await setWorkspace(workspace);
+    await expect(getWorkspace()).resolves.toEqual(workspace);
   });
 
-  it('addNote creates a note with generated id and timestamps', async () => {
-    const content = { type: 'doc', content: [] };
-    const note = await addNote('example.com', content, 'Test Note');
+  it('creates a fixed site root and child page', async () => {
+    const page = await addPage('example.com', null, 'hello', 'Example page');
+    const workspace = await getWorkspace();
+    const root = workspace.pages[siteRootId('example.com')];
 
-    expect(note.id).toBeDefined();
-    expect(note.content).toEqual(content);
-    expect(note.createdAt).toBeTypeOf('number');
-    expect(note.updatedAt).toBeTypeOf('number');
+    expect(root.type).toBe('site');
+    expect(root.parentId).toBeNull();
+    expect(page.parentId).toBe(root.id);
+    expect(workspace.pages[page.id].content).toBe('hello');
   });
 
-  it('serializes concurrent note writes so additions are not lost', async () => {
+  it('serializes concurrent page additions without losing pages', async () => {
     const [first, second] = await Promise.all([
-      addNote('example.com', 'first', 'First'),
-      addNote('example.com', 'second', 'Second'),
+      addPage('example.com', null, 'first', 'First'),
+      addPage('example.com', null, 'second', 'Second'),
     ]);
 
-    const notes = await getNotes();
-    expect(notes['example.com'].map((note) => note.id).sort()).toEqual([first.id, second.id].sort());
+    const workspace = await getWorkspace();
+    expect(Object.keys(workspace.pages)).toEqual(
+      expect.arrayContaining([siteRootId('example.com'), first.id, second.id]),
+    );
   });
 
-  it('updateNote modifies existing note content', async () => {
-    const note = await addNote('example.com', { type: 'doc' }, 'Test Note');
-    const newContent = { type: 'doc', content: [{ type: 'paragraph' }] };
+  it('updates page content and title', async () => {
+    const page = await addPage('example.com', null, 'old', 'Old');
 
-    await updateNote('example.com', note.id, newContent);
+    await updatePageContent(page.id, 'new');
+    await updatePageTitle(page.id, 'New title');
 
-    const notes = await getNotes();
-    expect(notes['example.com'][0].content).toEqual(newContent);
+    const workspace = await getWorkspace();
+    expect(workspace.pages[page.id].content).toBe('new');
+    expect(workspace.pages[page.id].title).toBe('New title');
   });
 
-  it('serializes concurrent updates to different notes', async () => {
-    const first = await addNote('example.com', 'old first', 'First');
-    const second = await addNote('example.com', 'old second', 'Second');
+  it('deletes a page subtree', async () => {
+    const parent = await addPage('example.com', null, 'parent', 'Parent');
+    const child = await addPage('example.com', parent.id, 'child', 'Child');
 
-    await Promise.all([
-      updateNote('example.com', first.id, 'new first'),
-      updateNote('example.com', second.id, 'new second'),
-    ]);
+    await deletePage(parent.id);
 
-    const notes = await getNotes();
-    expect(notes['example.com'].find((note) => note.id === first.id)?.content).toBe('new first');
-    expect(notes['example.com'].find((note) => note.id === second.id)?.content).toBe('new second');
+    const workspace = await getWorkspace();
+    expect(workspace.pages[parent.id]).toBeUndefined();
+    expect(workspace.pages[child.id]).toBeUndefined();
+    expect(workspace.pages[siteRootId('example.com')]).toBeDefined();
   });
 
-  it('deleteNote removes a note from storage', async () => {
-    const note = await addNote('example.com', { type: 'doc' }, 'Test Note');
-    await deleteNote('example.com', note.id);
+  it('moves a page under another parent and updates subtree site', async () => {
+    const firstRootPage = await addPage('example.com', null, 'parent', 'Parent');
+    const child = await addPage('example.com', firstRootPage.id, 'child', 'Child');
+    const otherRoot = await addPage('other.com', null, 'other', 'Other');
 
-    const notes = await getNotes();
-    expect(notes['example.com']).toBeUndefined();
+    await movePage(firstRootPage.id, otherRoot.id);
+
+    const workspace = await getWorkspace();
+    expect(workspace.pages[firstRootPage.id].parentId).toBe(otherRoot.id);
+    expect(workspace.pages[firstRootPage.id].site).toBe('other.com');
+    expect(workspace.pages[child.id].site).toBe('other.com');
   });
 
-  it('exports and imports notes backup JSON', async () => {
-    const note = await addNote('example.com', 'hello', 'Test Note');
-    const backup = await exportNotesBackup(123);
+  it('exports and imports workspace backup JSON', async () => {
+    const page = await addPage('example.com', 'missing', 'hello', 'Test page');
+    const backup = await exportWorkspaceBackup(123);
 
-    await setNotes({});
-    await importNotesBackup(backup);
+    await setWorkspace(createEmptyWorkspace());
+    await importWorkspaceBackup(backup);
 
-    const notes = await getNotes();
-    expect(notes['example.com'][0]).toEqual(note);
+    const workspace = await getWorkspace();
+    expect(workspace.pages[page.id]).toEqual(page);
   });
 
-  it('exports notes as markdown', async () => {
-    await addNote('example.com', 'hello markdown', 'Markdown Note');
-    const markdown = await exportNotesMarkdown(123);
+  it('exports workspace as markdown', async () => {
+    await addPage('example.com', null, 'hello markdown', 'Markdown page');
+    const markdown = await exportWorkspaceMarkdown(123);
 
     expect(markdown).toContain('# OpenNote Export');
     expect(markdown).toContain('## example.com');
-    expect(markdown).toContain('### Markdown Note');
+    expect(markdown).toContain('### Markdown page');
     expect(markdown).toContain('hello markdown');
   });
 
-  it('returns local notes storage usage', async () => {
-    await expect(getNotesStorageUsage()).resolves.toEqual({
+  it('returns local workspace storage usage', async () => {
+    await expect(getWorkspaceStorageUsage()).resolves.toEqual({
       bytesInUse: 2048,
       quotaBytes: 10485760,
     });

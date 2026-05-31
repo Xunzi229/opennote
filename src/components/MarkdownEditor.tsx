@@ -75,6 +75,15 @@ export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: Ma
   };
 
   useEffect(() => {
+    const newDoc = contentToMarkdown(content);
+    if (newDoc === markdownTextRef.current) return;
+
+    isExternalUpdateRef.current = true;
+    syncMarkdown(newDoc, true);
+    isExternalUpdateRef.current = false;
+  }, [content]);
+
+  useEffect(() => {
     if (viewMode !== 'source' || !editorRef.current) return;
 
     const state = EditorState.create({

@@ -95,4 +95,25 @@ describe('saveSelectionAsPage', () => {
       source,
     );
   });
+
+  it('prefers formatted markdown over plain selection text', async () => {
+    const { addPage } = await import('./storage');
+
+    await saveSelectionAsPage(
+      'example.com',
+      { action: 'create' },
+      {
+        text: 'Title Bold',
+        markdown: '## Title\n\n**Bold**',
+      },
+    );
+
+    expect(addPage).toHaveBeenLastCalledWith(
+      'example.com',
+      null,
+      '## Title\n\n**Bold**',
+      expect.any(String),
+      undefined,
+    );
+  });
 });

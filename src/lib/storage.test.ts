@@ -150,7 +150,7 @@ describe('workspace storage utilities', () => {
     await addPage('example.com', null, 'hello markdown', 'Markdown page');
     const markdown = await exportWorkspaceMarkdown(123);
 
-    expect(markdown).toContain('# OpenNote Export');
+    expect(markdown).toContain('# WebNest Export');
     expect(markdown).toContain('## example.com');
     expect(markdown).toContain('### Markdown page');
     expect(markdown).toContain('hello markdown');

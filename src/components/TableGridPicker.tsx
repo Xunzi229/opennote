@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Table } from 'lucide-react';
+import { t } from '../i18n';
 
 interface TableGridPickerProps {
   onSelect: (rows: number, cols: number) => void;
@@ -38,7 +39,7 @@ export default function TableGridPicker({ onSelect, disabled }: TableGridPickerP
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        title="插入表格"
+        title={t('insertTable')}
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
         className="btn btn-ghost btn-icon !w-8 !h-8 text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
@@ -49,7 +50,7 @@ export default function TableGridPicker({ onSelect, disabled }: TableGridPickerP
       {open && (
         <div className="table-grid-picker">
           <div className="table-grid-picker__label">
-            {hoverSize.rows > 0 ? `${hoverSize.rows} × ${hoverSize.cols}` : '选择表格大小'}
+            {hoverSize.rows > 0 ? `${hoverSize.rows} × ${hoverSize.cols}` : t('chooseTableSize')}
           </div>
           <div
             className="table-grid-picker__grid"

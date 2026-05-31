@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "OpenNote",
+  "name": "__MSG_appName__",
   "version": "1.0.1",
-  "description": "Website-specific notes in a right sidebar",
+  "default_locale": "zh_CN",
+  "description": "__MSG_appDescription__",
   "permissions": ["storage", "contextMenus", "sidePanel", "activeTab", "tabs", "notifications", "favicon", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": {
@@ -10,7 +11,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "OpenNote",
+    "default_title": "__MSG_appName__",
     "default_icon": {
       "16": "icon-16.png",
       "32": "icon-32.png",

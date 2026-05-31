@@ -10,6 +10,7 @@ import {
   FileText,
   Filter,
   Globe2,
+  Pin,
   Plus,
   Search,
   Trash2,
@@ -28,6 +29,7 @@ import { normalizeSiteInput } from '../lib/siteInput';
 import { getSiteFaviconUrl } from '../lib/favicon';
 import type { PageFilter, PageNode } from '../types';
 import PromptDialog from './PromptDialog';
+import { t } from '../i18n';
 
 export default function Sidebar() {
   const {
@@ -102,7 +104,7 @@ export default function Sidebar() {
   const handleConfirmAddSite = async () => {
     const hostname = normalizeSiteInput(addSiteInput);
     if (!hostname) {
-      toast.error('请输入有效的网站域名或 URL');
+      toast.error(t('invalidSite'));
       return;
     }
     const root = await ensureSiteRoot(hostname);
@@ -156,9 +158,9 @@ export default function Sidebar() {
       const json = await exportWorkspaceBackup();
       const date = new Date().toISOString().slice(0, 10);
       downloadTextFile(json, `opennote-workspace-${date}.json`, 'application/json');
-      toast.success('工作区已导出');
+      toast.success(t('workspaceExported'));
     } catch {
-      toast.error('导出失败');
+      toast.error(t('exportFailed'));
     }
   };
 
@@ -167,9 +169,9 @@ export default function Sidebar() {
       const markdown = await exportWorkspaceMarkdown();
       const date = new Date().toISOString().slice(0, 10);
       downloadTextFile(markdown, `opennote-workspace-${date}.md`, 'text/markdown');
-      toast.success('Markdown 已导出');
+      toast.success(t('markdownExported'));
     } catch {
-      toast.error('Markdown 导出失败');
+      toast.error(t('markdownExportFailed'));
     }
   };
 
@@ -178,28 +180,28 @@ export default function Sidebar() {
     event.target.value = '';
     if (!file) return;
 
-    const confirmed = window.confirm('导入备份会替换当前所有本地页面，确定继续吗？');
+    const confirmed = window.confirm(t('importConfirm'));
     if (!confirmed) return;
 
     try {
       await importWorkspaceBackup(await file.text());
       await loadWorkspace();
-      toast.success('工作区已导入');
+      toast.success(t('workspaceImported'));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '导入失败');
+      toast.error(error instanceof Error ? error.message : t('importFailed'));
     }
   };
 
   const filters: { id: PageFilter; label: string }[] = [
-    { id: 'all', label: '全部' },
-    { id: 'pinned', label: '置顶' },
-    { id: 'favorite', label: '收藏' },
-    { id: 'tagged', label: '有标签' },
+    { id: 'all', label: t('filterAll') },
+    { id: 'pinned', label: t('filterPinned') },
+    { id: 'favorite', label: t('filterFavorite') },
+    { id: 'tagged', label: t('filterTagged') },
   ];
   const sortLabelByMode = {
-    updated: '手动/更新',
-    created: '按创建',
-    title: '按标题',
+    updated: t('sortUpdated'),
+    created: t('sortCreated'),
+    title: t('sortTitle'),
   } satisfies Record<typeof pageSortMode, string>;
   const usageText = storageUsage ? formatStorageUsage(storageUsage) : null;
 
@@ -208,17 +210,17 @@ export default function Sidebar() {
       <aside className="panel panel-sidebar">
         <div className="panel-header">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="OpenNote" className="logo-mark" />
+            <img src="/logo.png" alt={t('productNameEnglish')} className="logo-mark" />
             <div className="min-w-0 flex-1">
-              <h1 className="text-[15px] font-semibold text-[var(--color-text)] leading-none">OpenNote</h1>
-              <p className="text-[12px] text-[var(--color-text-secondary)] mt-1">全局工作区</p>
+              <h1 className="text-[15px] font-semibold text-[var(--color-text)] leading-none">{t('productName')}</h1>
+              <p className="text-[12px] text-[var(--color-text-secondary)] mt-1">{t('productSubtitle')}</p>
             </div>
             {actualCurrentSite && actualCurrentSite !== currentSite && (
               <button
                 type="button"
                 onClick={handleSelectCurrentSite}
                 className="btn btn-ghost btn-icon"
-                title={`定位到 ${actualCurrentSite}`}
+                title={t('locateCurrentSite', { site: actualCurrentSite })}
               >
                 <Globe2 className="w-4 h-4" />
               </button>
@@ -231,7 +233,7 @@ export default function Sidebar() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94a3b8]" />
             <input
               type="text"
-              placeholder="搜索站点或页面..."
+              placeholder={t('searchPlaceholder')}
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               className="input-field"
@@ -243,7 +245,7 @@ export default function Sidebar() {
               type="button"
               onClick={cyclePageSortMode}
               className="btn btn-secondary flex-1"
-              title="切换排序"
+              title={t('sortToggle')}
             >
               <ArrowUpDown className="w-3.5 h-3.5" />
               {sortLabelByMode[pageSortMode]}
@@ -268,7 +270,7 @@ export default function Sidebar() {
             <div className="rounded-[8px] border border-[var(--color-border)] bg-[var(--color-muted)] p-3">
               <div className="flex items-center gap-2 text-[12px] text-[var(--color-text-secondary)] mb-2">
                 <Globe2 className="w-3.5 h-3.5" />
-                <span className="min-w-0 truncate">当前站点：{activeSite}</span>
+                <span className="min-w-0 truncate">{t('currentSite', { site: activeSite })}</span>
               </div>
               <button
                 type="button"
@@ -276,7 +278,7 @@ export default function Sidebar() {
                 className="btn btn-secondary w-full"
               >
                 <Plus className="w-4 h-4" />
-                在当前站点新建页面
+                {t('createPageInCurrentSite')}
               </button>
             </div>
           )}
@@ -285,7 +287,7 @@ export default function Sidebar() {
         <div className="flex-1 overflow-y-auto px-2 pb-2">
           {rows.length === 0 ? (
             <div className="empty-state">
-              <p className="text-[13px]">{searchQuery ? '没有匹配的页面' : '还没有页面'}</p>
+              <p className="text-[13px]">{searchQuery ? t('noMatchedPages') : t('noPages')}</p>
             </div>
           ) : (
             rows.map(({ page, depth, hasChildren }) => {
@@ -341,7 +343,7 @@ export default function Sidebar() {
                       if (hasChildren) void togglePageCollapsed(page.id);
                     }}
                     className="w-5 h-5 shrink-0 inline-flex items-center justify-center rounded hover:bg-white/70"
-                    aria-label={page.collapsed ? '展开' : '折叠'}
+                    aria-label={page.collapsed ? t('expand') : t('collapse')}
                   >
                     {hasChildren ? (
                       page.collapsed ? (
@@ -382,18 +384,25 @@ export default function Sidebar() {
                     <span
                       onDoubleClick={(event) => handleStartEditTitle(page, event)}
                       className={`min-w-0 flex-1 truncate text-[13px] ${canRename ? 'cursor-text' : ''}`}
-                      title={canRename ? '双击重命名' : page.site}
+                      title={canRename ? t('renameByDoubleClick') : page.site}
                     >
                       {page.title}
                     </span>
+                  )}
+
+                  {page.pinned && (
+                    <Pin
+                      className="w-3.5 h-3.5 shrink-0 text-[var(--color-primary-hover)] fill-current"
+                      aria-label={t('pinned')}
+                    />
                   )}
 
                   <button
                     type="button"
                     onClick={(event) => handleCreateChildPage(page, event)}
                     className="opacity-0 group-hover:opacity-100 btn btn-ghost btn-icon !w-6 !h-6 text-[var(--color-primary-hover)]"
-                    title="在此节点下新建页面"
-                    aria-label={`在 ${page.title} 下新建页面`}
+                    title={t('createPageUnder')}
+                    aria-label={t('createPageUnderLabel', { title: page.title })}
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
@@ -406,8 +415,8 @@ export default function Sidebar() {
                         setDeleteTarget(page);
                       }}
                       className="opacity-0 group-hover:opacity-100 btn btn-ghost btn-icon !w-6 !h-6 text-[var(--color-danger)]"
-                      title="删除页面"
-                      aria-label="删除页面"
+                      title={t('deletePage')}
+                      aria-label={t('deletePage')}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -421,8 +430,8 @@ export default function Sidebar() {
                         setSiteToDelete(page.site);
                       }}
                       className="opacity-0 group-hover:opacity-100 btn btn-ghost btn-icon !w-6 !h-6 text-[var(--color-danger)]"
-                      title="删除站点"
-                      aria-label="删除站点"
+                      title={t('deleteSite')}
+                      aria-label={t('deleteSite')}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -435,21 +444,21 @@ export default function Sidebar() {
 
         <div className="panel-footer">
           <div className="grid grid-cols-3 gap-2 mb-2">
-            <button onClick={handleExportWorkspace} className="btn btn-secondary w-full !px-2" title="导出 JSON 备份">
+            <button onClick={handleExportWorkspace} className="btn btn-secondary w-full !px-2" title={t('exportJsonBackup')}>
               <Download className="w-4 h-4" />
               JSON
             </button>
-            <button onClick={handleExportMarkdown} className="btn btn-secondary w-full !px-2" title="导出 Markdown">
+            <button onClick={handleExportMarkdown} className="btn btn-secondary w-full !px-2" title={t('exportMarkdown')}>
               <FileText className="w-4 h-4" />
               MD
             </button>
             <button
               onClick={() => importInputRef.current?.click()}
               className="btn btn-secondary w-full !px-2"
-              title="导入 JSON 备份"
+              title={t('importJsonBackup')}
             >
               <Upload className="w-4 h-4" />
-              导入
+              {t('import')}
             </button>
           </div>
           <input
@@ -461,38 +470,38 @@ export default function Sidebar() {
           />
           {usageText && (
             <div className="mb-2 text-[11px] text-[var(--color-text-secondary)] text-center">
-              本地已用 {usageText}
+              {t('localStorageUsed', { usage: usageText })}
             </div>
           )}
           <button onClick={handleOpenAddSite} className="btn btn-secondary w-full">
             <Plus className="w-4 h-4" />
-            添加站点
+            {t('addSite')}
           </button>
         </div>
       </aside>
 
       <ConfirmDialog
         isOpen={Boolean(deleteTarget)}
-        title="删除页面"
-        message={`确定删除「${deleteTarget?.title ?? '这个页面'}」及其所有子页面吗？此操作不可恢复。`}
-        confirmText="删除"
-        cancelText="取消"
+        title={t('deletePage')}
+        message={t('confirmDeletePage', { title: deleteTarget?.title ?? t('thisPage') })}
+        confirmText={t('delete')}
+        cancelText={t('cancel')}
         danger
         onConfirm={async () => {
           if (!deleteTarget) return;
           await deletePage(deleteTarget.id);
           setDeleteTarget(null);
-          toast.success('页面已删除');
+          toast.success(t('pageDeleted'));
         }}
         onCancel={() => setDeleteTarget(null)}
       />
 
       <ConfirmDialog
         isOpen={Boolean(siteToDelete)}
-        title="删除站点"
-        message={`确定要删除站点 "${siteToDelete}" 及其所有页面吗？此操作无法撤销。`}
-        confirmText="删除"
-        cancelText="取消"
+        title={t('deleteSite')}
+        message={t('confirmDeleteSite', { site: siteToDelete ?? '' })}
+        confirmText={t('delete')}
+        cancelText={t('cancel')}
         danger
         onConfirm={async () => {
           if (!siteToDelete) return;
@@ -504,12 +513,12 @@ export default function Sidebar() {
 
       <PromptDialog
         isOpen={showAddSiteDialog}
-        title="添加站点"
-        label="网站域名或 URL"
-        placeholder="example.com 或 https://example.com"
+        title={t('addSite')}
+        label={t('siteDomainOrUrl')}
+        placeholder={t('sitePlaceholder')}
         value={addSiteInput}
-        confirmText="添加"
-        cancelText="取消"
+        confirmText={t('add')}
+        cancelText={t('cancel')}
         onChange={setAddSiteInput}
         onConfirm={handleConfirmAddSite}
         onCancel={() => {

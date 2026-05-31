@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { t } from '../i18n';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -15,8 +16,8 @@ export default function ConfirmDialog({
   isOpen,
   title,
   message,
-  confirmText = '确认',
-  cancelText = '取消',
+  confirmText = t('confirm'),
+  cancelText = t('cancel'),
   onConfirm,
   onCancel,
   danger = false,

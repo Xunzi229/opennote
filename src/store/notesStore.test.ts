@@ -123,6 +123,27 @@ describe('workspace store', () => {
     ]);
   });
 
+  it('sorts pinned sibling pages before normal pages', () => {
+    const pinned = {
+      ...page('pinned', 'page', 'example.com', 'site:example.com', 'Pinned', 1),
+      pinned: true,
+    };
+    const workspace: WorkspaceStore = {
+      rootIds: ['site:example.com'],
+      pages: {
+        'site:example.com': page('site:example.com', 'site', 'example.com', null, 'example.com', 0),
+        normal: page('normal', 'page', 'example.com', 'site:example.com', 'Normal', 0),
+        pinned,
+      },
+    };
+    useNotesStore.setState({ workspace, pageSortMode: 'updated' });
+
+    expect(useNotesStore.getState().getChildren('site:example.com').map((item) => item.id)).toEqual([
+      'pinned',
+      'normal',
+    ]);
+  });
+
   it('renames normal pages but keeps site root titles fixed', async () => {
     const root = await useNotesStore.getState().ensureSiteRoot('example.com');
     const child = await useNotesStore.getState().addPage('example.com', root.id, '', 'Old');

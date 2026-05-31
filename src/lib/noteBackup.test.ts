@@ -76,7 +76,7 @@ describe('workspace backup helpers', () => {
   it('serializes workspace to a readable markdown document', () => {
     const markdown = serializeWorkspaceMarkdown(workspace, Date.UTC(2026, 4, 31, 3));
 
-    expect(markdown).toContain('# OpenNote Export');
+    expect(markdown).toContain('# WebNest Export');
     expect(markdown).toContain('Exported at: 2026-05-31');
     expect(markdown).toContain('## example.com');
     expect(markdown).toContain('### Example Note');

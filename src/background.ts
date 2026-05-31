@@ -12,6 +12,7 @@ import {
   purgeLegacyContentScriptsFromOpenTabs,
   resetLegacyContentScriptPurgeFlag,
 } from './lib/purgeLegacyContentScripts';
+import { t } from './i18n';
 import type { NoteSource } from './types';
 
 function setupPanelBehavior() {
@@ -93,8 +94,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icon-48.png',
-      title: 'OpenNote',
-      message: '此页面不支持笔记',
+      title: t('productName'),
+      message: t('unsupportedPage'),
     });
     return;
   }

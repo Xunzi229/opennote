@@ -10,6 +10,7 @@ import { insertMarkdownSnippet, insertTableMarkdown } from '../lib/markdownInser
 import type { MarkdownInsertType } from '../lib/markdownInsertTypes';
 import LiveMarkdownEditor, { type LiveMarkdownEditorHandle } from './LiveMarkdownEditor';
 import MarkdownToolbar from './MarkdownToolbar';
+import { t } from '../i18n';
 
 interface MarkdownEditorProps {
   content: unknown;
@@ -84,7 +85,7 @@ export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: Ma
         markdown({ base: markdownLanguage }),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-        placeholder('开始编写 Markdown 笔记...'),
+        placeholder(t('editorPlaceholder')),
         EditorView.lineWrapping,
         editorTheme,
         EditorView.updateListener.of((update) => {
@@ -158,11 +159,11 @@ export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: Ma
         <div className="flex items-center gap-2 px-3 py-2">
           <button type="button" onClick={() => setViewMode('source')} className={modeButtonClass('source')}>
             <Code2 className="w-3.5 h-3.5" />
-            编辑
+            {t('edit')}
           </button>
           <button type="button" onClick={() => setViewMode('live')} className={modeButtonClass('live')}>
             <Sparkles className="w-3.5 h-3.5" />
-            实时渲染
+            {t('livePreview')}
           </button>
         </div>
         <MarkdownToolbar onInsert={handleInsert} onInsertTable={handleInsertTable} />

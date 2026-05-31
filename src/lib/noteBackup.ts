@@ -40,7 +40,7 @@ export function parseWorkspaceBackup(json: string): WorkspaceStore {
 }
 
 export function serializeWorkspaceMarkdown(workspace: WorkspaceStore, exportedAt = Date.now()): string {
-  const lines = ['# OpenNote Export', '', `Exported at: ${formatDate(exportedAt)}`, ''];
+  const lines = ['# WebNest Export', '', `Exported at: ${formatDate(exportedAt)}`, ''];
 
   for (const rootId of workspace.rootIds) {
     const root = workspace.pages[rootId];

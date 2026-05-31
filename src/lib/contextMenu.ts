@@ -10,6 +10,7 @@ import {
 } from './contextMenuConstants';
 import type { Note } from '../types';
 import { siteRootId, WORKSPACE_KEY } from './storage';
+import { t } from '../i18n';
 
 const dynamicMenuIds = new Set<string>();
 let lastBuiltMenuKey = '';
@@ -112,7 +113,7 @@ export function setupStaticContextMenu() {
     void chrome.runtime.lastError;
     chrome.contextMenus.create({
       id: CONTEXT_MENU_ROOT_ID,
-      title: '保存为笔记',
+      title: t('saveAsNote'),
       contexts: ['selection'],
     }, () => {
       void chrome.runtime.lastError;
@@ -120,7 +121,7 @@ export function setupStaticContextMenu() {
     chrome.contextMenus.create({
       id: CONTEXT_MENU_NEW_ID,
       parentId: CONTEXT_MENU_ROOT_ID,
-      title: '新建笔记',
+      title: t('newNote'),
       contexts: ['selection'],
     }, () => {
       void chrome.runtime.lastError;

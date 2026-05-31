@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { t } from '../i18n';
 
 interface PromptDialogProps {
   isOpen: boolean;
@@ -20,8 +21,8 @@ export default function PromptDialog({
   label,
   placeholder,
   value,
-  confirmText = '确定',
-  cancelText = '取消',
+  confirmText = t('ok'),
+  cancelText = t('cancel'),
   onChange,
   onConfirm,
   onCancel,

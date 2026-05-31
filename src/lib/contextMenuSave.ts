@@ -1,6 +1,7 @@
 import { addPage, getWorkspace, updatePageContent } from './storage';
 import { appendMarkdown } from './appendMarkdown';
 import type { NoteSource } from '../types';
+import { t } from '../i18n';
 
 export interface PendingNoteSelect {
   site: string;
@@ -15,10 +16,11 @@ export interface CapturedSelection {
 
 function generatePageTitle() {
   const now = new Date();
-  return `${now.getMonth() + 1}/${now.getDate()} ${now
+  const date = `${now.getMonth() + 1}/${now.getDate()} ${now
     .getHours()
     .toString()
-    .padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} 新页面`;
+    .padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+  return t('newPageTitle', { date });
 }
 
 function resolveSelectionContent(selection: CapturedSelection) {

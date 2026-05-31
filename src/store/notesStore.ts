@@ -24,6 +24,7 @@ import {
   updatePageTitle as storageUpdatePageTitle,
 } from '../lib/storage';
 import { contentToMarkdown } from '../lib/markdownContent';
+import { t } from '../i18n';
 
 interface NotesState {
   workspace: WorkspaceStore;
@@ -417,10 +418,11 @@ function getNextSelection(workspace: WorkspaceStore, deletedId: string | null): 
 
 function generateTitle() {
   const now = new Date();
-  return `${now.getMonth() + 1}/${now.getDate()} ${now
+  const date = `${now.getMonth() + 1}/${now.getDate()} ${now
     .getHours()
     .toString()
-    .padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')} 新页面`;
+    .padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+  return t('newPageTitle', { date });
 }
 
 function normalizeTag(tag: string): string {
@@ -430,7 +432,7 @@ function normalizeTag(tag: string): string {
 function handleStoreError(error: unknown, fallback: string) {
   const message = error instanceof Error ? error.message : fallback;
   if (message.includes('QUOTA_BYTES')) {
-    toast.error('存储空间不足，请删除部分页面');
+    toast.error(t('storageQuotaExceeded'));
   } else {
     useNotesStore.setState({ error: message });
   }

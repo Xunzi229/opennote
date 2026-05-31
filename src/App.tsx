@@ -7,6 +7,7 @@ import { usePersistedPanelVisibility } from './hooks/usePersistedPanelVisibility
 import { usePendingNoteSelect, useExtensionLifecycle } from './hooks/usePendingNoteSelect';
 import Sidebar from './components/Sidebar';
 import EditorPanel from './components/EditorPanel';
+import { t } from './i18n';
 
 function App() {
   const { loadWorkspace } = useNotesStore();
@@ -29,8 +30,8 @@ function App() {
             type="button"
             onClick={() => setShowSidebar(false)}
             className="panel-rail"
-            title="隐藏工作区"
-            aria-label="隐藏工作区"
+            title={t('hideWorkspace')}
+            aria-label={t('hideWorkspace')}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -40,8 +41,8 @@ function App() {
           type="button"
           onClick={() => setShowSidebar(true)}
           className="panel-rail"
-          title="显示工作区"
-          aria-label="显示工作区"
+          title={t('showWorkspace')}
+          aria-label={t('showWorkspace')}
         >
           <ChevronRight className="w-4 h-4" />
         </button>

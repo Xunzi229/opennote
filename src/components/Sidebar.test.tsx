@@ -156,4 +156,15 @@ describe('Sidebar current site entry', () => {
 
     expect(screen.queryByRole('button', { name: '新建页面' })).not.toBeInTheDocument();
   });
+
+  it('uses a styled filter menu instead of the native select', () => {
+    render(<Sidebar />);
+
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '全部' }));
+    fireEvent.click(screen.getByRole('option', { name: '置顶' }));
+
+    expect(useNotesStore.getState().pageFilter).toBe('pinned');
+  });
 });

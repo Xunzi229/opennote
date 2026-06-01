@@ -67,7 +67,9 @@ export default function Sidebar() {
   const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
   const [showAddSiteDialog, setShowAddSiteDialog] = useState(false);
   const [addSiteInput, setAddSiteInput] = useState('');
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +86,19 @@ export default function Sidebar() {
       cancelled = true;
     };
   }, [workspace]);
+
+  useEffect(() => {
+    if (!isFilterMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!filterMenuRef.current?.contains(event.target as Node)) {
+        setIsFilterMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isFilterMenuOpen]);
 
   const handleCreateCurrentSitePage = async () => {
     if (!activeSite) return;
@@ -250,19 +265,60 @@ export default function Sidebar() {
               <ArrowUpDown className="w-3.5 h-3.5" />
               {sortLabelByMode[pageSortMode]}
             </button>
-            <div className="relative">
-              <Filter className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-secondary)] pointer-events-none" />
-              <select
-                value={pageFilter}
-                onChange={(event) => setPageFilter(event.target.value as PageFilter)}
-                className="input-field !pl-8 !pr-8 !w-[108px] appearance-none cursor-pointer"
+            <div ref={filterMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setIsFilterMenuOpen((open) => !open)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setIsFilterMenuOpen(false);
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setIsFilterMenuOpen(true);
+                  }
+                }}
+                className={`btn btn-secondary !w-[108px] justify-between !px-3 ${
+                  isFilterMenuOpen ? 'border-[var(--color-primary)] shadow-[0_0_0_3px_rgba(34,197,94,0.12)]' : ''
+                }`}
+                aria-haspopup="listbox"
+                aria-expanded={isFilterMenuOpen}
               >
-                {filters.map((filter) => (
-                  <option key={filter.id} value={filter.id}>
-                    {filter.label}
-                  </option>
-                ))}
-              </select>
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 shrink-0 text-[var(--color-text-secondary)]" />
+                  <span className="truncate">{filters.find((filter) => filter.id === pageFilter)?.label}</span>
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-[var(--color-text-secondary)] transition-transform ${
+                  isFilterMenuOpen ? 'rotate-180' : ''
+                }`} />
+              </button>
+              {isFilterMenuOpen && (
+                <div
+                  role="listbox"
+                  className="absolute right-0 top-full z-50 mt-1 w-32 overflow-hidden rounded-[8px] border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-md)]"
+                >
+                  {filters.map((filter) => {
+                    const isSelected = filter.id === pageFilter;
+                    return (
+                      <button
+                        key={filter.id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          setPageFilter(filter.id);
+                          setIsFilterMenuOpen(false);
+                        }}
+                        className={`flex h-8 w-full items-center rounded-[6px] px-3 text-left text-[13px] transition-colors ${
+                          isSelected
+                            ? 'bg-[var(--color-primary)] text-white'
+                            : 'text-[var(--color-text)] hover:bg-[var(--color-primary-soft)] hover:text-[var(--color-primary-soft-text)]'
+                        }`}
+                      >
+                        {filter.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 

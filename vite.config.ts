@@ -9,6 +9,12 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     chunkSizeWarningLimit: 700,
+    modulePreload: {
+      resolveDependencies(_filename, deps, context) {
+        if (context.hostType !== 'html') return deps;
+        return deps.filter((dep) => !dep.includes('editor-codemirror') && !dep.includes('editor-tiptap'));
+      },
+    },
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
@@ -16,8 +22,6 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
-          if (id.includes('@tiptap') || id.includes('prosemirror')) return 'editor-tiptap';
-          if (id.includes('@codemirror') || id.includes('@lezer')) return 'editor-codemirror';
           if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) return 'react';
           if (id.includes('lucide-react') || id.includes('sonner') || id.includes('zustand')) return 'ui-vendor';
           return 'vendor';

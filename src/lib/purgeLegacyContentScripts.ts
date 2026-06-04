@@ -2,27 +2,6 @@ const PURGE_SESSION_KEY = 'legacyContentScriptsPurged';
 
 let purgePromise: Promise<void> | null = null;
 
-function isReloadablePage(url: string | undefined): boolean {
-  if (!url) return false;
-  return url.startsWith('http://') || url.startsWith('https://');
-}
-
-export async function reloadHttpTabsAfterExtensionUpdate() {
-  const tabs = await chrome.tabs.query({});
-
-  await Promise.all(
-    tabs.map(async (tab) => {
-      if (!tab.id || !isReloadablePage(tab.url)) return;
-
-      try {
-        await chrome.tabs.reload(tab.id);
-      } catch {
-        // Tab may be restricted or already closed.
-      }
-    }),
-  );
-}
-
 export async function unregisterLegacyContentScripts() {
   const scripting = chrome.scripting as typeof chrome.scripting & {
     getRegisteredContentScripts?: (
@@ -53,7 +32,6 @@ async function doPurgeLegacyContentScripts() {
   if (purged) return;
 
   await unregisterLegacyContentScripts();
-  await reloadHttpTabsAfterExtensionUpdate();
   await chrome.storage.session.set({ [PURGE_SESSION_KEY]: true });
 }
 

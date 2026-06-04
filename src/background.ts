@@ -7,11 +7,7 @@ import {
   setupStaticContextMenu,
 } from './lib/contextMenu';
 import { bindNotesCacheSync, initNotesCache } from './lib/notesCache';
-import {
-  ensureTabLegacyScriptsPurged,
-  purgeLegacyContentScriptsFromOpenTabs,
-  resetLegacyContentScriptPurgeFlag,
-} from './lib/purgeLegacyContentScripts';
+import { purgeLegacyContentScriptsFromOpenTabs } from './lib/purgeLegacyContentScripts';
 import { t } from './i18n';
 import type { NoteSource } from './types';
 
@@ -60,12 +56,10 @@ async function captureSelectionFromTab(tabId: number): Promise<CapturedSelection
   return null;
 }
 
-void purgeLegacyContentScriptsFromOpenTabs();
-
 chrome.runtime.onInstalled.addListener(() => {
   setupStaticContextMenu();
   setupPanelBehavior();
-  void resetLegacyContentScriptPurgeFlag().then(() => purgeLegacyContentScriptsFromOpenTabs());
+  void purgeLegacyContentScriptsFromOpenTabs();
 });
 
 chrome.runtime.onConnect.addListener((port) => {
@@ -107,9 +101,6 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   void chrome.sidePanel.open({ tabId }).catch(() => {});
 
   void (async () => {
-    const ready = await ensureTabLegacyScriptsPurged(tabId);
-    if (!ready) return;
-
     let selection: CapturedSelection | null = null;
 
     try {

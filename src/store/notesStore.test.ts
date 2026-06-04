@@ -144,6 +144,34 @@ describe('workspace store', () => {
     ]);
   });
 
+  it('builds visible tree rows without repeated full-page scans', () => {
+    const workspace: WorkspaceStore = {
+      rootIds: ['site:example.com'],
+      pages: {
+        'site:example.com': page('site:example.com', 'site', 'example.com', null, 'example.com', 0),
+      },
+    };
+
+    for (let index = 0; index < 200; index += 1) {
+      workspace.pages[`page-${index}`] = page(
+        `page-${index}`,
+        'page',
+        'example.com',
+        index === 0 ? 'site:example.com' : `page-${index - 1}`,
+        `Page ${index}`,
+        index,
+      );
+    }
+
+    useNotesStore.setState({ workspace });
+    const valuesSpy = vi.spyOn(Object, 'values');
+
+    expect(useNotesStore.getState().visibleTreeRows()).toHaveLength(201);
+    expect(valuesSpy.mock.calls.length).toBeLessThan(20);
+
+    valuesSpy.mockRestore();
+  });
+
   it('renames normal pages but keeps site root titles fixed', async () => {
     const root = await useNotesStore.getState().ensureSiteRoot('example.com');
     const child = await useNotesStore.getState().addPage('example.com', root.id, '', 'Old');

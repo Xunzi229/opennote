@@ -322,6 +322,7 @@ function buildVisibleTreeRows(state: NotesState): TreeRow[] {
   const query = searchQuery.trim().toLowerCase();
   const rows: TreeRow[] = [];
   const matches = new Set<string>();
+  const childrenByParent = buildChildrenIndex(workspace);
 
   if (query || pageFilter !== 'all') {
     for (const page of Object.values(workspace.pages)) {
@@ -332,7 +333,7 @@ function buildVisibleTreeRows(state: NotesState): TreeRow[] {
   }
 
   const walk = (page: PageNode, depth: number) => {
-    const children = sortPages(getChildren(workspace, page.id), pageSortMode);
+    const children = sortPages(childrenByParent.get(page.id) ?? [], pageSortMode);
     const shouldShow = !query && pageFilter === 'all' ? true : matches.has(page.id);
     if (!shouldShow) return;
 
@@ -355,13 +356,25 @@ function getChildren(workspace: WorkspaceStore, parentId: string): PageNode[] {
   return Object.values(workspace.pages).filter((page) => page.parentId === parentId);
 }
 
+function buildChildrenIndex(workspace: WorkspaceStore): Map<string, PageNode[]> {
+  const childrenByParent = new Map<string, PageNode[]>();
+  for (const page of Object.values(workspace.pages)) {
+    if (!page.parentId) continue;
+    const siblings = childrenByParent.get(page.parentId) ?? [];
+    siblings.push(page);
+    childrenByParent.set(page.parentId, siblings);
+  }
+  return childrenByParent;
+}
+
 function flattenSubtree(workspace: WorkspaceStore, rootId: string): PageNode[] {
   const root = workspace.pages[rootId];
   if (!root) return [];
+  const childrenByParent = buildChildrenIndex(workspace);
   const result: PageNode[] = [];
   const walk = (page: PageNode) => {
     result.push(page);
-    for (const child of getChildren(workspace, page.id)) walk(child);
+    for (const child of childrenByParent.get(page.id) ?? []) walk(child);
   };
   walk(root);
   return result;

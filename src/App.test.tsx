@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 vi.mock('./components/Sidebar', () => ({
@@ -29,8 +29,47 @@ vi.mock('./hooks/usePersistedPanelVisibility', () => ({
 }));
 
 describe('App layout', () => {
-  it('renders a single workspace panel next to the editor', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('renders lightweight loading panels before async content is ready', () => {
     render(<App />);
+
+    expect(screen.getByText('正在加载工作区...')).toBeInTheDocument();
+    expect(screen.getByText('正在准备编辑器...')).toBeInTheDocument();
+  });
+
+  it('defers loading the heavy panels until after the first paint delay', async () => {
+    render(<App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.queryByTestId('workspace-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('editor-panel')).not.toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(120);
+      await vi.dynamicImportSettled();
+    });
+
+    expect(screen.getByTestId('workspace-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('editor-panel')).toBeInTheDocument();
+  });
+
+  it('renders a single workspace panel next to the editor', async () => {
+    render(<App />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(120);
+      await vi.dynamicImportSettled();
+    });
 
     expect(screen.getByTestId('workspace-panel')).toBeInTheDocument();
     expect(screen.getByTestId('editor-panel')).toBeInTheDocument();

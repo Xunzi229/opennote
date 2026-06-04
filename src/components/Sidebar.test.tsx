@@ -167,4 +167,90 @@ describe('Sidebar current site entry', () => {
 
     expect(useNotesStore.getState().pageFilter).toBe('pinned');
   });
+
+  it('renders only the visible page tree rows before scrolling', () => {
+    const workspace = createEmptyWorkspace();
+    workspace.pages['site:example.com'] = {
+      id: 'site:example.com',
+      type: 'site',
+      site: 'example.com',
+      parentId: null,
+      title: 'example.com',
+      content: '',
+      sortIndex: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    workspace.rootIds.push('site:example.com');
+
+    for (let index = 0; index < 200; index += 1) {
+      workspace.pages[`page-${index}`] = {
+        id: `page-${index}`,
+        type: 'page',
+        site: 'example.com',
+        parentId: 'site:example.com',
+        title: `Page ${index}`,
+        content: '',
+        sortIndex: index,
+        createdAt: 1,
+        updatedAt: 1,
+      };
+    }
+
+    useNotesStore.setState({
+      workspace,
+      currentSite: 'example.com',
+      selectedPageId: 'site:example.com',
+      selectedNoteId: 'site:example.com',
+    });
+
+    render(<Sidebar />);
+
+    expect(screen.getByText('Page 0')).toBeInTheDocument();
+    expect(screen.queryByText('Page 199')).not.toBeInTheDocument();
+  });
+
+  it('renders later page tree rows after scrolling', () => {
+    const workspace = createEmptyWorkspace();
+    workspace.pages['site:example.com'] = {
+      id: 'site:example.com',
+      type: 'site',
+      site: 'example.com',
+      parentId: null,
+      title: 'example.com',
+      content: '',
+      sortIndex: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    workspace.rootIds.push('site:example.com');
+
+    for (let index = 0; index < 200; index += 1) {
+      workspace.pages[`page-${index}`] = {
+        id: `page-${index}`,
+        type: 'page',
+        site: 'example.com',
+        parentId: 'site:example.com',
+        title: `Page ${index}`,
+        content: '',
+        sortIndex: index,
+        createdAt: 1,
+        updatedAt: 1,
+      };
+    }
+
+    useNotesStore.setState({
+      workspace,
+      currentSite: 'example.com',
+      selectedPageId: 'site:example.com',
+      selectedNoteId: 'site:example.com',
+    });
+
+    render(<Sidebar />);
+    fireEvent.scroll(screen.getByTestId('workspace-tree'), {
+      target: { scrollTop: 200 * 34 },
+    });
+
+    expect(screen.getByText('Page 199')).toBeInTheDocument();
+  });
 });

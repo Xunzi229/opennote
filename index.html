@@ -5,9 +5,75 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenNote</title>
+    <style>
+      html,
+      body,
+      #root {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        background: #f8fafc;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      .boot-loader {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        color: #64748b;
+      }
+
+      .boot-loader-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 13px;
+      }
+
+      .boot-loader-spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid #d1fae5;
+        border-top-color: #22c55e;
+        border-radius: 999px;
+        animation: opennote-spin 0.8s linear infinite;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body,
+        .boot-loader {
+          background: #111827;
+          color: #cbd5e1;
+        }
+
+        .boot-loader-spinner {
+          border-color: #064e3b;
+          border-top-color: #4ade80;
+        }
+      }
+
+      @keyframes opennote-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-loader" role="status" aria-live="polite">
+        <div class="boot-loader-card">
+          <div class="boot-loader-spinner" aria-hidden="true"></div>
+          <span>正在打开 WebNest...</span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNotesStore } from '../store/notesStore';
 import { useActiveSite } from '../hooks/useActiveSite';
 import ConfirmDialog from './ConfirmDialog';
@@ -31,6 +31,10 @@ import type { PageFilter, PageNode } from '../types';
 import PromptDialog from './PromptDialog';
 import { t } from '../i18n';
 
+const TREE_ROW_HEIGHT = 34;
+const TREE_OVERSCAN_ROWS = 8;
+const TREE_FALLBACK_VIEWPORT_ROWS = 24;
+
 export default function Sidebar() {
   const {
     workspace,
@@ -59,6 +63,7 @@ export default function Sidebar() {
   const activeSiteRoot = activeSite ? workspace.pages[siteRootId(activeSite)] : undefined;
   const shouldOfferCurrentSiteCreate = Boolean(activeSite && !activeSiteRoot);
   const rows = visibleTreeRows();
+  const selectedRowIndex = rows.findIndex(({ page }) => page.id === selectedPageId);
   const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState('');
@@ -68,22 +73,70 @@ export default function Sidebar() {
   const [showAddSiteDialog, setShowAddSiteDialog] = useState(false);
   const [addSiteInput, setAddSiteInput] = useState('');
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const [treeScrollTop, setTreeScrollTop] = useState(0);
+  const [treeViewportHeight, setTreeViewportHeight] = useState(0);
   const importInputRef = useRef<HTMLInputElement>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
+  const treeScrollRef = useRef<HTMLDivElement>(null);
+
+  const treeViewportRows = Math.ceil(
+    (treeViewportHeight || TREE_ROW_HEIGHT * TREE_FALLBACK_VIEWPORT_ROWS) / TREE_ROW_HEIGHT,
+  );
+  const treeStartIndex = Math.max(0, Math.floor(treeScrollTop / TREE_ROW_HEIGHT) - TREE_OVERSCAN_ROWS);
+  const treeEndIndex = Math.min(rows.length, treeStartIndex + treeViewportRows + TREE_OVERSCAN_ROWS * 2);
+  const visibleRows = rows.slice(treeStartIndex, treeEndIndex);
+  const topSpacerHeight = treeStartIndex * TREE_ROW_HEIGHT;
+  const bottomSpacerHeight = Math.max(0, rows.length - treeEndIndex) * TREE_ROW_HEIGHT;
+
+  useLayoutEffect(() => {
+    const element = treeScrollRef.current;
+    if (!element) return;
+
+    const updateViewportHeight = () => {
+      setTreeViewportHeight(element.clientHeight);
+    };
+
+    updateViewportHeight();
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(updateViewportHeight);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const element = treeScrollRef.current;
+    if (!element || !selectedPageId) return;
+    if (selectedRowIndex < 0) return;
+
+    const viewportHeight = element.clientHeight || TREE_ROW_HEIGHT * TREE_FALLBACK_VIEWPORT_ROWS;
+    const rowTop = selectedRowIndex * TREE_ROW_HEIGHT;
+    const rowBottom = rowTop + TREE_ROW_HEIGHT;
+    const currentTop = element.scrollTop;
+    const currentBottom = currentTop + viewportHeight;
+
+    if (rowTop >= currentTop && rowBottom <= currentBottom) return;
+
+    const nextTop = Math.max(0, rowTop - TREE_ROW_HEIGHT * 2);
+    element.scrollTop = nextTop;
+    setTreeScrollTop(nextTop);
+  }, [selectedRowIndex, selectedPageId]);
 
   useEffect(() => {
     let cancelled = false;
-
-    void getWorkspaceStorageUsage()
-      .then((usage) => {
-        if (!cancelled) setStorageUsage(usage);
-      })
-      .catch(() => {
-        if (!cancelled) setStorageUsage(null);
-      });
+    const timeout = window.setTimeout(() => {
+      void getWorkspaceStorageUsage()
+        .then((usage) => {
+          if (!cancelled) setStorageUsage(usage);
+        })
+        .catch(() => {
+          if (!cancelled) setStorageUsage(null);
+        });
+    }, 750);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeout);
     };
   }, [workspace]);
 
@@ -340,13 +393,20 @@ export default function Sidebar() {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-2 pb-2">
+        <div
+          ref={treeScrollRef}
+          data-testid="workspace-tree"
+          className="flex-1 overflow-y-auto px-2 pb-2"
+          onScroll={(event) => setTreeScrollTop(event.currentTarget.scrollTop)}
+        >
           {rows.length === 0 ? (
             <div className="empty-state">
               <p className="text-[13px]">{searchQuery ? t('noMatchedPages') : t('noPages')}</p>
             </div>
           ) : (
-            rows.map(({ page, depth, hasChildren }) => {
+            <>
+              {topSpacerHeight > 0 && <div style={{ height: topSpacerHeight }} aria-hidden="true" />}
+              {visibleRows.map(({ page, depth, hasChildren }) => {
               const isActive = selectedPageId === page.id;
               const canRename = page.type === 'page';
               const paddingLeft = 8 + depth * 16;
@@ -494,7 +554,9 @@ export default function Sidebar() {
                   )}
                 </div>
               );
-            })
+              })}
+              {bottomSpacerHeight > 0 && <div style={{ height: bottomSpacerHeight }} aria-hidden="true" />}
+            </>
           )}
         </div>
 

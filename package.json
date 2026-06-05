@@ -1,11 +1,11 @@
 {
   "name": "opennote",
   "private": true,
-  "version": "1.0.8",
+  "version": "1.0.12",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && vite build --config vite.extension.config.ts",
+    "build": "node scripts/bump-version.cjs && tsc -b && vite build && vite build --config vite.extension.config.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest"

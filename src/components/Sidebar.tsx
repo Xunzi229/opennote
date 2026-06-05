@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+﻿import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNotesStore } from '../store/notesStore';
 import { useActiveSite } from '../hooks/useActiveSite';
 import ConfirmDialog from './ConfirmDialog';
@@ -10,6 +10,7 @@ import {
   FileText,
   Filter,
   Globe2,
+  Languages,
   Pin,
   Plus,
   Search,
@@ -29,7 +30,7 @@ import { normalizeSiteInput } from '../lib/siteInput';
 import { getSiteFaviconUrl } from '../lib/favicon';
 import type { PageFilter, PageNode } from '../types';
 import PromptDialog from './PromptDialog';
-import { t } from '../i18n';
+import { t, useLocale, localeLabels, availableLocales } from '../i18n';
 
 const TREE_ROW_HEIGHT = 34;
 const TREE_OVERSCAN_ROWS = 8;
@@ -65,6 +66,7 @@ export default function Sidebar() {
   const rows = visibleTreeRows();
   const selectedRowIndex = rows.findIndex(({ page }) => page.id === selectedPageId);
   const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
+  const [currentLocale, setLocale] = useLocale();
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<PageNode | null>(null);
@@ -73,10 +75,12 @@ export default function Sidebar() {
   const [showAddSiteDialog, setShowAddSiteDialog] = useState(false);
   const [addSiteInput, setAddSiteInput] = useState('');
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [treeScrollTop, setTreeScrollTop] = useState(0);
   const [treeViewportHeight, setTreeViewportHeight] = useState(0);
   const importInputRef = useRef<HTMLInputElement>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
+  const langMenuRef = useRef<HTMLDivElement>(null);
   const treeScrollRef = useRef<HTMLDivElement>(null);
 
   const treeViewportRows = Math.ceil(
@@ -152,6 +156,19 @@ export default function Sidebar() {
     document.addEventListener('mousedown', handlePointerDown);
     return () => document.removeEventListener('mousedown', handlePointerDown);
   }, [isFilterMenuOpen]);
+
+  useEffect(() => {
+    if (!isLangMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!langMenuRef.current?.contains(event.target as Node)) {
+        setIsLangMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isLangMenuOpen]);
 
   const handleCreateCurrentSitePage = async () => {
     if (!activeSite) return;
@@ -591,10 +608,52 @@ export default function Sidebar() {
               {t('localStorageUsed', { usage: usageText })}
             </div>
           )}
-          <button onClick={handleOpenAddSite} className="btn btn-secondary w-full">
-            <Plus className="w-4 h-4" />
-            {t('addSite')}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={handleOpenAddSite} className="btn btn-secondary flex-1">
+              <Plus className="w-4 h-4" />
+              {t('addSite')}
+            </button>
+            <div className="relative" ref={langMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsLangMenuOpen((open) => !open)}
+                className="btn btn-secondary btn-icon w-[34px] h-[34px]"
+                title={t('language')}
+                aria-label={t('language')}
+              >
+                <Languages className="w-4 h-4" />
+              </button>
+              {isLangMenuOpen && (
+                <div
+                  role="listbox"
+                  className="absolute right-0 bottom-full z-50 mb-1 w-28 overflow-hidden rounded-[8px] border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-[var(--shadow-md)]"
+                >
+                  {availableLocales.map((locale) => {
+                    const isSelected = currentLocale === locale;
+                    return (
+                      <button
+                        key={locale}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          setLocale(locale);
+                          setIsLangMenuOpen(false);
+                        }}
+                        className={`flex h-8 w-full items-center rounded-[6px] px-3 text-left text-[13px] transition-colors ${
+                          isSelected
+                            ? 'bg-[var(--color-primary)] text-white'
+                            : 'text-[var(--color-text)] hover:bg-[var(--color-primary-soft)] hover:text-[var(--color-primary-soft-text)]'
+                        }`}
+                      >
+                        {localeLabels[locale]}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </aside>
 

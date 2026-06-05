@@ -1,11 +1,22 @@
 {
   "manifest_version": 3,
   "name": "__MSG_appName__",
-  "version": "1.0.8",
+  "version": "1.0.12",
   "default_locale": "zh_CN",
   "description": "__MSG_appDescription__",
-  "permissions": ["storage", "contextMenus", "sidePanel", "activeTab", "tabs", "notifications", "favicon", "scripting"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "sidePanel",
+    "activeTab",
+    "tabs",
+    "notifications",
+    "favicon",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"

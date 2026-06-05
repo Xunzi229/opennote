@@ -1,17 +1,20 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+﻿import { lazy, Suspense, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { useNotesStore } from './store/notesStore';
 import { useSyncSiteWithActiveTab } from './hooks/useSyncSiteWithActiveTab';
 import { usePersistedPanelVisibility } from './hooks/usePersistedPanelVisibility';
 import { usePendingNoteSelect, useExtensionLifecycle } from './hooks/usePendingNoteSelect';
-import { t } from './i18n';
+import { t, useLocale } from './i18n';
 
 const Sidebar = lazy(() => import('./components/Sidebar'));
 const EditorPanel = lazy(() => import('./components/EditorPanel'));
 const PANEL_LOAD_DELAY_MS = 100;
 
 function App() {
+  // Subscribe to locale changes so all components re-render when language is switched
+  useLocale();
+
   const { loadWorkspace } = useNotesStore();
   const { showSidebar, setShowSidebar } = usePersistedPanelVisibility();
   const canLoadPanels = useDeferredPanelLoad();

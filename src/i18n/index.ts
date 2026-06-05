@@ -1,3 +1,5 @@
+﻿import { useEffect, useState } from 'react';
+
 export const messages = {
   'zh-CN': {
     productName: '网巢笔记',
@@ -102,6 +104,7 @@ export const messages = {
     chooseTableSize: '选择表格大小',
     storageQuotaExceeded: '存储空间不足，请删除部分页面',
     newPageTitle: '{date} 新页面',
+    language: '语言',
   },
   'en-US': {
     productName: 'WebNest',
@@ -206,6 +209,7 @@ export const messages = {
     chooseTableSize: 'Choose table size',
     storageQuotaExceeded: 'Storage is full. Delete some pages first.',
     newPageTitle: '{date} New page',
+    language: 'Language',
   },
 } as const;
 
@@ -215,12 +219,48 @@ export type MessageKey = keyof typeof messages['zh-CN'];
 const DEFAULT_LOCALE: Locale = 'zh-CN';
 const EN_LOCALE: Locale = 'en-US';
 
+export const LOCALE_STORAGE_KEY = 'app-locale';
+
+export const availableLocales: Locale[] = ['zh-CN', 'en-US'];
+
+export const localeLabels: Record<Locale, string> = {
+  'zh-CN': '简体中文',
+  'en-US': 'English',
+};
+
+function loadPersistedLocale(): Locale | null {
+  try {
+    const value = localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (value === 'zh-CN' || value === 'en-US') return value;
+  } catch {
+    // localStorage not available (extension context, etc.)
+  }
+  return null;
+}
+
+let persistedLocale: Locale | null = loadPersistedLocale();
+
+export function setLocale(locale: Locale): void {
+  persistedLocale = locale;
+  try {
+    localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  } catch {
+    // localStorage not available
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('applocalechange'));
+  }
+}
+
 export function getLocaleFromLanguage(language: string | undefined | null): Locale {
   if (!language) return DEFAULT_LOCALE;
   return language.toLowerCase().startsWith('en') ? EN_LOCALE : DEFAULT_LOCALE;
 }
 
 export function getCurrentLocale(): Locale {
+  // Persisted locale takes priority
+  if (persistedLocale) return persistedLocale;
+  // Fallback to browser language detection
   if (typeof navigator === 'undefined') return DEFAULT_LOCALE;
   const languages = navigator.languages?.length ? navigator.languages : [navigator.language];
   const english = languages.find((language) => language?.toLowerCase().startsWith('en'));
@@ -243,4 +283,20 @@ export function t(
     const value = variables[name];
     return value === undefined ? match : String(value);
   });
+}
+
+/**
+ * React hook that re-renders the component when the locale changes.
+ * Call this in any component that uses `t()` to ensure it updates reactively.
+ */
+export function useLocale(): [Locale, (locale: Locale) => void] {
+  const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    const handler = () => forceUpdate((n) => n + 1);
+    window.addEventListener('applocalechange', handler);
+    return () => window.removeEventListener('applocalechange', handler);
+  }, []);
+
+  return [getCurrentLocale(), setLocale];
 }

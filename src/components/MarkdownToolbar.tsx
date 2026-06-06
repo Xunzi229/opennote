@@ -38,32 +38,39 @@ const TOOLBAR_ITEMS: {
 
 export default function MarkdownToolbar({ onInsert, onInsertTable }: MarkdownToolbarProps) {
   return (
-    <div className="flex items-center gap-1 flex-wrap px-3 py-2 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-      {TOOLBAR_ITEMS.slice(0, 8).map(({ type, labelKey, icon: Icon }) => (
-        <button
-          key={type}
-          type="button"
-          title={t(labelKey)}
-          onClick={() => onInsert(type)}
-          className="btn btn-ghost btn-icon !w-8 !h-8 text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
-        >
-          <Icon className="w-4 h-4" />
-        </button>
-      ))}
+    <div className="markdown-toolbar" role="toolbar" aria-label="Markdown formatting">
+      <div className="toolbar-group">
+        {TOOLBAR_ITEMS.slice(0, 2).map(({ type, labelKey, icon: Icon }) => (
+          <button key={type} type="button" title={t(labelKey)} onClick={() => onInsert(type)} className="toolbar-button">
+            <Icon className="w-4 h-4" />
+          </button>
+        ))}
+      </div>
 
-      <TableGridPicker onSelect={onInsertTable} />
+      <div className="toolbar-group">
+        {TOOLBAR_ITEMS.slice(2, 4).map(({ type, labelKey, icon: Icon }) => (
+          <button key={type} type="button" title={t(labelKey)} onClick={() => onInsert(type)} className="toolbar-button">
+            <Icon className="w-4 h-4" />
+          </button>
+        ))}
+      </div>
 
-      {TOOLBAR_ITEMS.slice(8).map(({ type, labelKey, icon: Icon }) => (
-        <button
-          key={type}
-          type="button"
-          title={t(labelKey)}
-          onClick={() => onInsert(type)}
-          className="btn btn-ghost btn-icon !w-8 !h-8 text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
-        >
-          <Icon className="w-4 h-4" />
-        </button>
-      ))}
+      <div className="toolbar-group">
+        {TOOLBAR_ITEMS.slice(4, 8).map(({ type, labelKey, icon: Icon }) => (
+          <button key={type} type="button" title={t(labelKey)} onClick={() => onInsert(type)} className="toolbar-button">
+            <Icon className="w-4 h-4" />
+          </button>
+        ))}
+      </div>
+
+      <div className="toolbar-group">
+        <TableGridPicker onSelect={onInsertTable} />
+        {TOOLBAR_ITEMS.slice(8).map(({ type, labelKey, icon: Icon }) => (
+          <button key={type} type="button" title={t(labelKey)} onClick={() => onInsert(type)} className="toolbar-button">
+            <Icon className="w-4 h-4" />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -5,17 +5,20 @@ export function useActiveSite() {
   const [actualCurrentSite, setActualCurrentSite] = useState<string | null>(null);
 
   useEffect(() => {
+    const tabsApi = typeof chrome === 'undefined' ? undefined : chrome.tabs;
+    if (!tabsApi?.query || !tabsApi.get || !tabsApi.onActivated || !tabsApi.onUpdated) return;
+
     const updateFromTab = (tab: chrome.tabs.Tab | undefined) => {
       setActualCurrentSite(getHostnameFromUrl(tab?.url));
     };
 
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    tabsApi.query({ active: true, currentWindow: true }, (tabs) => {
       updateFromTab(tabs[0]);
     });
 
     const handleActivated = (activeInfo: { tabId: number }) => {
-      chrome.tabs.get(activeInfo.tabId, (tab) => {
-        if (chrome.runtime.lastError) return;
+      tabsApi.get(activeInfo.tabId, (tab) => {
+        if (chrome.runtime?.lastError) return;
         updateFromTab(tab);
       });
     };
@@ -26,12 +29,12 @@ export function useActiveSite() {
       updateFromTab(tab);
     };
 
-    chrome.tabs.onActivated.addListener(handleActivated);
-    chrome.tabs.onUpdated.addListener(handleUpdated);
+    tabsApi.onActivated.addListener(handleActivated);
+    tabsApi.onUpdated.addListener(handleUpdated);
 
     return () => {
-      chrome.tabs.onActivated.removeListener(handleActivated);
-      chrome.tabs.onUpdated.removeListener(handleUpdated);
+      tabsApi.onActivated.removeListener(handleActivated);
+      tabsApi.onUpdated.removeListener(handleUpdated);
     };
   }, []);
 

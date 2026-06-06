@@ -5,11 +5,14 @@ import {
   deletePage,
   exportWorkspaceBackup,
   exportWorkspaceMarkdown,
+  getMeta,
   getWorkspace,
   getWorkspaceStorageUsage,
   importWorkspaceBackup,
   movePage,
+  onWorkspaceChange,
   setWorkspace,
+  setMeta,
   siteRootId,
   updatePageContent,
   updatePageTitle,
@@ -161,5 +164,37 @@ describe('workspace storage utilities', () => {
       bytesInUse: 2048,
       quotaBytes: 10485760,
     });
+  });
+
+  it('does not crash when workspace change events are unavailable', () => {
+    const storage = chrome.storage as unknown as {
+      onChanged?: typeof chrome.storage.onChanged;
+    };
+    const originalOnChanged = storage.onChanged;
+    storage.onChanged = undefined;
+
+    const unsubscribe = onWorkspaceChange(vi.fn());
+
+    expect(() => unsubscribe()).not.toThrow();
+    storage.onChanged = originalOnChanged;
+  });
+
+  it('uses memory storage when chrome local storage is unavailable', async () => {
+    const storage = chrome.storage as unknown as {
+      local?: typeof chrome.storage.local;
+    };
+    const originalLocal = storage.local;
+    storage.local = undefined;
+    const workspace = {
+      pages: {},
+      rootIds: [],
+    };
+
+    await setWorkspace(workspace);
+    await setMeta({ lastActiveSite: null, version: 2, showSidebar: false });
+
+    await expect(getWorkspace()).resolves.toEqual(workspace);
+    await expect(getMeta()).resolves.toMatchObject({ showSidebar: false });
+    storage.local = originalLocal;
   });
 });

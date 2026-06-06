@@ -6,18 +6,21 @@ export function useSyncSiteWithActiveTab() {
   const setCurrentSite = useNotesStore((state) => state.setCurrentSite);
 
   useEffect(() => {
+    const tabsApi = typeof chrome === 'undefined' ? undefined : chrome.tabs;
+    if (!tabsApi?.query || !tabsApi.get || !tabsApi.onActivated || !tabsApi.onUpdated) return;
+
     const syncFromTab = (tab: chrome.tabs.Tab | undefined) => {
       const hostname = getHostnameFromUrl(tab?.url);
       setCurrentSite(hostname);
     };
 
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    tabsApi.query({ active: true, currentWindow: true }, (tabs) => {
       syncFromTab(tabs[0]);
     });
 
     const handleActivated = (activeInfo: { tabId: number }) => {
-      chrome.tabs.get(activeInfo.tabId, (tab) => {
-        if (chrome.runtime.lastError) return;
+      tabsApi.get(activeInfo.tabId, (tab) => {
+        if (chrome.runtime?.lastError) return;
         syncFromTab(tab);
       });
     };
@@ -28,12 +31,12 @@ export function useSyncSiteWithActiveTab() {
       syncFromTab(tab);
     };
 
-    chrome.tabs.onActivated.addListener(handleActivated);
-    chrome.tabs.onUpdated.addListener(handleUpdated);
+    tabsApi.onActivated.addListener(handleActivated);
+    tabsApi.onUpdated.addListener(handleUpdated);
 
     return () => {
-      chrome.tabs.onActivated.removeListener(handleActivated);
-      chrome.tabs.onUpdated.removeListener(handleUpdated);
+      tabsApi.onActivated.removeListener(handleActivated);
+      tabsApi.onUpdated.removeListener(handleUpdated);
     };
   }, [setCurrentSite]);
 }

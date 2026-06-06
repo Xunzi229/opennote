@@ -36,6 +36,10 @@ export interface MetaStore {
   version: number;
   showSidebar?: boolean;
   showNoteList?: boolean;
+  showFavoritesSection?: boolean;
+  showPinnedSection?: boolean;
+  favoritesSectionCollapsed?: boolean;
+  pinnedSectionCollapsed?: boolean;
 }
 
 export type PageFilter = 'all' | 'pinned' | 'favorite' | 'tagged';

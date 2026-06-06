@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import EditorPanel from './EditorPanel';
 import { useNotesStore } from '../store/notesStore';
 import type { WorkspaceStore } from '../types';
+import { setLocale } from '../i18n';
 
 const markdownEditorMock = vi.hoisted(() => ({ mountCount: 0 }));
 
@@ -23,6 +24,7 @@ vi.mock('./MarkdownEditor', () => ({
 describe('EditorPanel editor lifecycle', () => {
   beforeEach(() => {
     markdownEditorMock.mountCount = 0;
+    setLocale('zh-CN');
     Object.assign(navigator, {
       clipboard: {
         writeText: vi.fn(async () => undefined),
@@ -128,5 +130,21 @@ describe('EditorPanel editor lifecycle', () => {
     await waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('hello');
     });
+  });
+
+  it('renders redesigned page context and writing surface anchors', () => {
+    render(<EditorPanel />);
+
+    expect(screen.getByTestId('editor-breadcrumb')).toBeInTheDocument();
+    expect(screen.getByTestId('editor-action-cluster')).toBeInTheDocument();
+    expect(screen.getByTestId('editor-writing-surface')).toBeInTheDocument();
+    expect(screen.getByTestId('editor-status-footer')).toBeInTheDocument();
+  });
+
+  it('renders editor helper text in the active locale', () => {
+    render(<EditorPanel />);
+
+    expect(screen.getByText('暂无标签')).toBeInTheDocument();
+    expect(screen.queryByText('No tags yet')).not.toBeInTheDocument();
   });
 });

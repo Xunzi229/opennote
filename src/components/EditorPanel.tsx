@@ -5,11 +5,14 @@ import MarkdownEditor from './MarkdownEditor';
 import { contentToMarkdown } from '../lib/markdownContent';
 import { getNoteStats, formatRelativeTime } from '../lib/noteStats';
 import {
+  AlertCircle,
+  CheckCircle2,
   Copy,
   CopyPlus,
   ExternalLink,
   FilePlus2,
   FileText,
+  LoaderCircle,
   MoreHorizontal,
   Pin,
   Star,
@@ -159,7 +162,7 @@ export default function EditorPanel() {
 
   if (!selectedPage) {
     return (
-      <main className="panel panel-editor">
+      <main className="panel panel-editor editor-panel">
         <div className="empty-state h-full flex flex-col items-center justify-center">
           <FileText className="empty-state-icon" />
           <p className="text-[14px] font-medium text-[var(--color-text)]">{t('selectOrCreatePage')}</p>
@@ -177,24 +180,35 @@ export default function EditorPanel() {
       : contentToMarkdown(selectedPage.content);
   const stats = getNoteStats(statsContent);
   const isMoreMenuOpen = moreMenuPageId === selectedPage.id;
-  return (
-    <main className="panel panel-editor">
-      <div className="px-5 py-3 border-b border-[var(--color-border)]">
-        <PageTitleInput
-          key={selectedPage.id}
-          page={selectedPage}
-          onRename={updatePageTitle}
-        />
+  const sourceTitle = selectedPage.source?.pageTitle || selectedPage.source?.hostname || selectedPage.site;
 
-        <div className="mt-2 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 flex-wrap">
+  return (
+    <main className="panel panel-editor editor-panel">
+      <header className="editor-page-header">
+        <div className="editor-breadcrumb" data-testid="editor-breadcrumb">
+          <span className="breadcrumb-site">{selectedPage.site}</span>
+          <span className="breadcrumb-separator">/</span>
+          <span className="breadcrumb-page">{sourceTitle}</span>
+          {selectedPage.source?.pageUrl && (
+            <a
+              href={selectedPage.source.pageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="breadcrumb-source-link"
+              title={selectedPage.source.pageUrl}
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
+        </div>
+
+        <div className="editor-title-row">
+          <PageTitleInput key={selectedPage.id} page={selectedPage} onRename={updatePageTitle} />
+
+          <div className="editor-action-cluster" data-testid="editor-action-cluster">
             <button
               onClick={() => togglePagePin(selectedPage.id)}
-              className={`btn btn-ghost btn-icon ${
-                selectedPage.pinned
-                  ? 'bg-[var(--color-primary-soft)] text-[var(--color-primary-hover)]'
-                  : ''
-              }`}
+              className={`btn btn-ghost btn-icon ${selectedPage.pinned ? 'is-selected text-[var(--color-primary-hover)]' : ''}`}
               title={selectedPage.pinned ? t('unpin') : t('pin')}
               aria-label={selectedPage.pinned ? t('unpin') : t('pin')}
               aria-pressed={Boolean(selectedPage.pinned)}
@@ -203,7 +217,7 @@ export default function EditorPanel() {
             </button>
             <button
               onClick={() => togglePageFavorite(selectedPage.id)}
-              className={`btn btn-ghost btn-icon ${selectedPage.favorite ? 'text-amber-500' : ''}`}
+              className={`btn btn-ghost btn-icon ${selectedPage.favorite ? 'text-amber-500 is-selected' : ''}`}
               title={t('favorite')}
             >
               <Star className={`w-4 h-4 ${selectedPage.favorite ? 'fill-amber-500' : ''}`} />
@@ -211,22 +225,11 @@ export default function EditorPanel() {
             <button onClick={handleAddTag} className="btn btn-ghost btn-icon" title={t('addTag')}>
               <Tag className="w-4 h-4" />
             </button>
-            {selectedPage.type === 'page' && (
-              <button
-                onClick={handleDeletePage}
-                className="btn btn-ghost btn-icon text-[var(--color-danger)]"
-                title={t('delete')}
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setMoreMenuPageId(isMoreMenuOpen ? null : selectedPage.id)}
-                className={`btn btn-ghost btn-icon ${
-                  isMoreMenuOpen ? 'bg-[var(--color-muted)] text-[var(--color-primary-hover)]' : ''
-                }`}
+                className={`btn btn-ghost btn-icon ${isMoreMenuOpen ? 'is-selected' : ''}`}
                 title={t('moreActions')}
                 aria-label={t('moreActions')}
                 aria-haspopup="menu"
@@ -235,26 +238,13 @@ export default function EditorPanel() {
                 <MoreHorizontal className="w-4 h-4" />
               </button>
               {isMoreMenuOpen && (
-                <div
-                  role="menu"
-                  className="absolute left-0 top-full z-40 mt-1 w-44 overflow-hidden rounded-[8px] border border-[var(--color-border)] bg-white py-1 shadow-lg"
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={handleCreateChildPage}
-                    className="w-full px-3 py-2 text-left text-[13px] text-[var(--color-text)] hover:bg-[var(--color-muted)] inline-flex items-center gap-2"
-                  >
+                <div role="menu" className="floating-menu editor-more-menu">
+                  <button type="button" role="menuitem" onClick={handleCreateChildPage} className="floating-menu-item with-icon">
                     <FilePlus2 className="w-4 h-4 text-[var(--color-text-secondary)]" />
                     {t('newChildPage')}
                   </button>
                   {selectedPage.type === 'page' && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={handleDuplicatePage}
-                      className="w-full px-3 py-2 text-left text-[13px] text-[var(--color-text)] hover:bg-[var(--color-muted)] inline-flex items-center gap-2"
-                    >
+                    <button type="button" role="menuitem" onClick={handleDuplicatePage} className="floating-menu-item with-icon">
                       <CopyPlus className="w-4 h-4 text-[var(--color-text-secondary)]" />
                       {t('copyPage')}
                     </button>
@@ -262,10 +252,8 @@ export default function EditorPanel() {
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() =>
-                      handleCopyText(contentToMarkdown(selectedPage.content), t('markdownCopied'))
-                    }
-                    className="w-full px-3 py-2 text-left text-[13px] text-[var(--color-text)] hover:bg-[var(--color-muted)] inline-flex items-center gap-2"
+                    onClick={() => handleCopyText(contentToMarkdown(selectedPage.content), t('markdownCopied'))}
+                    className="floating-menu-item with-icon"
                   >
                     <Copy className="w-4 h-4 text-[var(--color-text-secondary)]" />
                     {t('copyMarkdown')}
@@ -274,29 +262,19 @@ export default function EditorPanel() {
                     type="button"
                     role="menuitem"
                     onClick={() => handleCopyText(selectedPage.title, t('titleCopied'))}
-                    className="w-full px-3 py-2 text-left text-[13px] text-[var(--color-text)] hover:bg-[var(--color-muted)] inline-flex items-center gap-2"
+                    className="floating-menu-item with-icon"
                   >
                     <Copy className="w-4 h-4 text-[var(--color-text-secondary)]" />
                     {t('copyTitle')}
                   </button>
                   {selectedPage.source?.pageUrl && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={handleOpenSource}
-                      className="w-full px-3 py-2 text-left text-[13px] text-[var(--color-text)] hover:bg-[var(--color-muted)] inline-flex items-center gap-2"
-                    >
+                    <button type="button" role="menuitem" onClick={handleOpenSource} className="floating-menu-item with-icon">
                       <ExternalLink className="w-4 h-4 text-[var(--color-text-secondary)]" />
                       {t('openSource')}
                     </button>
                   )}
                   {selectedPage.type === 'page' && (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={handleDeletePage}
-                      className="w-full px-3 py-2 text-left text-[13px] text-[var(--color-danger)] hover:bg-[var(--color-muted)] inline-flex items-center gap-2"
-                    >
+                    <button type="button" role="menuitem" onClick={handleDeletePage} className="floating-menu-item with-icon is-danger">
                       <Trash2 className="w-4 h-4" />
                       {t('deletePage')}
                     </button>
@@ -304,6 +282,11 @@ export default function EditorPanel() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        <div className="editor-meta-row">
+          <div className="tag-row">
             {(selectedPage.tags || []).map((tag) => (
               <button
                 key={tag}
@@ -317,26 +300,22 @@ export default function EditorPanel() {
                 <X className="w-3 h-3" />
               </button>
             ))}
+            {(selectedPage.tags || []).length === 0 && <span className="meta-placeholder">{t('noTagsYet')}</span>}
           </div>
-
-          <div className="text-[12px] text-[var(--color-text-secondary)] shrink-0">
-            {saveStatus === 'saving' && t('saving')}
-            {saveStatus === 'saved' && t('saved')}
-            {saveStatus === 'error' && <span className="text-[var(--color-danger)]">{t('saveFailed')}</span>}
-          </div>
+          <SaveStatusPill status={saveStatus} />
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 overflow-hidden p-4">
+      <section className="editor-writing-surface" data-testid="editor-writing-surface">
         <MarkdownEditor
           key={selectedPage.id}
           noteId={selectedPage.id}
           content={selectedPage.content}
           onUpdate={handleEditorUpdate}
         />
-      </div>
+      </section>
 
-      <div className="px-5 py-2.5 border-t border-[var(--color-border)] flex items-center justify-between text-[12px] text-[var(--color-text-secondary)] bg-[var(--color-muted)]">
+      <footer className="editor-status-footer" data-testid="editor-status-footer">
         <div className="min-w-0 flex items-center gap-3">
           <span className="shrink-0">{t('lastEdited', { time: formatRelativeTime(selectedPage.updatedAt) })}</span>
           {selectedPage.source?.pageUrl && (
@@ -348,16 +327,12 @@ export default function EditorPanel() {
               title={selectedPage.source.pageTitle || selectedPage.source.pageUrl}
             >
               <ExternalLink className="w-3 h-3 shrink-0" />
-              <span className="truncate">
-                {selectedPage.source.pageTitle || selectedPage.source.hostname}
-              </span>
+              <span className="truncate">{selectedPage.source.pageTitle || selectedPage.source.hostname}</span>
             </a>
           )}
         </div>
-        <span>
-          {t('charsLines', { chars: stats.chars, lines: stats.lines })}
-        </span>
-      </div>
+        <span>{t('charsLines', { chars: stats.chars, lines: stats.lines })}</span>
+      </footer>
 
       <PromptDialog
         isOpen={showTagDialog}
@@ -373,6 +348,33 @@ export default function EditorPanel() {
         }}
       />
     </main>
+  );
+}
+
+function SaveStatusPill({ status }: { status: 'saved' | 'saving' | 'error' }) {
+  if (status === 'saving') {
+    return (
+      <span className="save-status-pill is-saving">
+        <LoaderCircle className="w-3.5 h-3.5 animate-spin" />
+        {t('saving')}
+      </span>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <span className="save-status-pill is-error">
+        <AlertCircle className="w-3.5 h-3.5" />
+        {t('saveFailed')}
+      </span>
+    );
+  }
+
+  return (
+    <span className="save-status-pill is-saved">
+      <CheckCircle2 className="w-3.5 h-3.5" />
+      {t('saved')}
+    </span>
   );
 }
 
@@ -413,8 +415,8 @@ function PageTitleInput({
           event.currentTarget.blur();
         }
       }}
-      className="w-full bg-transparent text-[22px] font-semibold text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-secondary)]"
-      placeholder="Untitled"
+      className="page-title-input"
+      placeholder={t('untitledPlaceholder')}
       title={canRename ? t('editPageName') : t('fixedSiteTitle')}
     />
   );

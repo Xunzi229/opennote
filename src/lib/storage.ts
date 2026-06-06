@@ -8,6 +8,7 @@ import {
 export const WORKSPACE_KEY = 'workspace';
 const META_KEY = 'meta';
 let workspaceWriteQueue: Promise<unknown> = Promise.resolve();
+const memoryStorage: Record<string, unknown> = {};
 
 export interface StorageUsage {
   bytesInUse: number;
@@ -33,15 +34,27 @@ function normalizeWorkspace(workspace: WorkspaceStore | undefined): WorkspaceSto
 }
 
 export async function getWorkspace(): Promise<WorkspaceStore> {
-  const result = await chrome.storage.local.get(WORKSPACE_KEY);
+  const storage = getLocalStorageArea();
+  if (!storage?.get) {
+    return normalizeWorkspace(memoryStorage[WORKSPACE_KEY] as WorkspaceStore | undefined);
+  }
+
+  const result = await storage.get(WORKSPACE_KEY);
   return normalizeWorkspace(result[WORKSPACE_KEY] as WorkspaceStore | undefined);
 }
 
 export async function setWorkspace(workspace: WorkspaceStore): Promise<void> {
+  const storage = getLocalStorageArea();
+  if (!storage?.set) {
+    memoryStorage[WORKSPACE_KEY] = normalizeWorkspace(workspace);
+    return;
+  }
+
   return new Promise((resolve, reject) => {
-    chrome.storage.local.set({ [WORKSPACE_KEY]: normalizeWorkspace(workspace) }, () => {
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
+    storage.set({ [WORKSPACE_KEY]: normalizeWorkspace(workspace) }, () => {
+      const lastError = getRuntimeLastError();
+      if (lastError) {
+        reject(lastError);
       } else {
         resolve();
       }
@@ -56,16 +69,28 @@ function queueWorkspaceWrite<T>(operation: () => Promise<T>): Promise<T> {
 }
 
 export async function getMeta(): Promise<MetaStore> {
-  const result = await chrome.storage.local.get(META_KEY);
+  const storage = getLocalStorageArea();
+  if (!storage?.get) {
+    return (memoryStorage[META_KEY] as MetaStore | undefined) || { lastActiveSite: null, version: 2 };
+  }
+
+  const result = await storage.get(META_KEY);
   const meta = result[META_KEY] as MetaStore | undefined;
   return meta || { lastActiveSite: null, version: 2 };
 }
 
 export async function setMeta(meta: MetaStore): Promise<void> {
+  const storage = getLocalStorageArea();
+  if (!storage?.set) {
+    memoryStorage[META_KEY] = meta;
+    return;
+  }
+
   return new Promise((resolve, reject) => {
-    chrome.storage.local.set({ [META_KEY]: meta }, () => {
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
+    storage.set({ [META_KEY]: meta }, () => {
+      const lastError = getRuntimeLastError();
+      if (lastError) {
+        reject(lastError);
       } else {
         resolve();
       }
@@ -265,16 +290,24 @@ export async function importWorkspaceBackup(json: string): Promise<WorkspaceStor
 }
 
 export async function getWorkspaceStorageUsage(): Promise<StorageUsage> {
+  const storage = getLocalStorageArea();
+  if (!storage?.getBytesInUse) {
+    return {
+      bytesInUse: new TextEncoder().encode(JSON.stringify(memoryStorage[WORKSPACE_KEY] ?? {})).length,
+    };
+  }
+
   const bytesInUse = await new Promise<number>((resolve, reject) => {
-    chrome.storage.local.getBytesInUse(WORKSPACE_KEY, (bytes) => {
-      if (chrome.runtime.lastError) {
-        reject(chrome.runtime.lastError);
+    storage.getBytesInUse(WORKSPACE_KEY, (bytes) => {
+      const lastError = getRuntimeLastError();
+      if (lastError) {
+        reject(lastError);
       } else {
         resolve(bytes);
       }
     });
   });
-  const localStorageArea = chrome.storage.local as typeof chrome.storage.local & {
+  const localStorageArea = storage as typeof chrome.storage.local & {
     QUOTA_BYTES?: number;
   };
 
@@ -285,13 +318,18 @@ export async function getWorkspaceStorageUsage(): Promise<StorageUsage> {
 }
 
 export function onWorkspaceChange(callback: (workspace: WorkspaceStore) => void): () => void {
+  const storageEvents = typeof chrome === 'undefined' ? undefined : chrome.storage?.onChanged;
+  if (!storageEvents?.addListener || !storageEvents.removeListener) {
+    return () => undefined;
+  }
+
   const listener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
     if (changes[WORKSPACE_KEY]) {
       callback(normalizeWorkspace(changes[WORKSPACE_KEY].newValue as WorkspaceStore | undefined));
     }
   };
-  chrome.storage.onChanged.addListener(listener);
-  return () => chrome.storage.onChanged.removeListener(listener);
+  storageEvents.addListener(listener);
+  return () => storageEvents.removeListener(listener);
 }
 
 export const getNotes = getWorkspace;
@@ -314,6 +352,16 @@ export const exportNotesMarkdown = exportWorkspaceMarkdown;
 export const importNotesBackup = importWorkspaceBackup;
 export const getNotesStorageUsage = getWorkspaceStorageUsage;
 export const onNotesChange = onWorkspaceChange;
+
+function getLocalStorageArea(): typeof chrome.storage.local | undefined {
+  if (typeof chrome === 'undefined') return undefined;
+  return chrome.storage?.local;
+}
+
+function getRuntimeLastError(): chrome.runtime.LastError | undefined {
+  if (typeof chrome === 'undefined') return undefined;
+  return chrome.runtime?.lastError;
+}
 
 function isDescendant(workspace: WorkspaceStore, candidateId: string, ancestorId: string): boolean {
   let current = workspace.pages[candidateId];

@@ -1,4 +1,5 @@
 export function isExtensionContextValid() {
+  if (typeof chrome === 'undefined') return false;
   try {
     return Boolean(chrome.runtime?.id);
   } catch {
@@ -7,14 +8,16 @@ export function isExtensionContextValid() {
 }
 
 export function reloadExtensionPageIfInvalid() {
+  if (typeof chrome === 'undefined') return false;
+
   try {
-    if (!chrome.runtime?.id) {
-      window.location.reload();
-      return;
-    }
+    void chrome.runtime?.id;
   } catch {
     window.location.reload();
+    return true;
   }
+
+  return false;
 }
 
 export function isExtensionContextError(error: unknown) {

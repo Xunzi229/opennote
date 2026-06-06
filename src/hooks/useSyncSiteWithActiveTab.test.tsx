@@ -46,4 +46,15 @@ describe('useSyncSiteWithActiveTab', () => {
     expect(setCurrentSite).toHaveBeenCalledWith('example.com');
     expect(ensureSiteRoot).not.toHaveBeenCalled();
   });
+
+  it('does not crash when the tabs API is unavailable', () => {
+    vi.stubGlobal('chrome', {
+      runtime: {
+        lastError: null,
+      },
+    });
+
+    expect(() => render(<HookHarness />)).not.toThrow();
+    expect(ensureSiteRoot).not.toHaveBeenCalled();
+  });
 });

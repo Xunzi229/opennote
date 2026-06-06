@@ -41,9 +41,9 @@ const editorTheme = EditorView.theme({
     textAlign: 'left',
   },
   '.cm-gutters': {
-    backgroundColor: '#fafafa',
+    backgroundColor: 'var(--color-muted)',
     borderRight: '1px solid var(--color-border)',
-    color: '#94a3b8',
+    color: 'var(--color-text-tertiary)',
   },
   '&.cm-focused': {
     outline: 'none',
@@ -138,7 +138,7 @@ export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: Ma
   }, [content, viewMode]);
 
   const modeButtonClass = (mode: ViewMode) =>
-    `btn ${viewMode === mode ? 'btn-primary' : 'btn-secondary'} !h-8 !px-3 !text-[12px]`;
+    `segmented-button ${viewMode === mode ? 'is-active' : ''}`;
 
   const handleInsert = (type: MarkdownInsertType) => {
     if (viewMode === 'source') {
@@ -164,8 +164,8 @@ export default function MarkdownEditor({ content, noteId, onUpdate, onBlur }: Ma
 
   return (
     <div className="editor-shell flex flex-col h-full overflow-hidden">
-      <div className="border-b border-[var(--color-border)] bg-[var(--color-muted)]">
-        <div className="flex items-center gap-2 px-3 py-2">
+      <div className="editor-toolbar-shell">
+        <div className="editor-mode-switch" aria-label={t('editorViewMode')}>
           <button type="button" onClick={() => setViewMode('source')} className={modeButtonClass('source')}>
             <Code2 className="w-3.5 h-3.5" />
             {t('edit')}

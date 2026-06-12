@@ -9,4 +9,8 @@ describe('global CSS contracts', () => {
     expect(css).toContain('padding-left: 34px;');
     expect(css).toContain('padding-right: 12px;');
   });
+
+  it('shows a pointer cursor for markdown links', () => {
+    expect(css).toMatch(/\.markdown-preview a,\s*\.markdown-link\s*\{[^}]*cursor:\s*pointer;/s);
+  });
 });

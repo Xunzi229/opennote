@@ -22,6 +22,20 @@ export interface LiveMarkdownEditorHandle {
   insert: (type: MarkdownInsertType, options?: { rows?: number; cols?: number }) => void;
 }
 
+function openClickedLink(event: Event, root: HTMLElement) {
+  if (!(event instanceof MouseEvent) || event.button !== 0) return false;
+
+  const target = event.target;
+  const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
+  const link = element?.closest<HTMLAnchorElement>('a[href]');
+
+  if (!link || !root.contains(link)) return false;
+
+  event.preventDefault();
+  window.open(link.href, link.target || '_blank');
+  return true;
+}
+
 function applyInsert(
   type: MarkdownInsertType,
   editor: NonNullable<ReturnType<typeof useEditor>>,
@@ -88,6 +102,8 @@ const LiveMarkdownEditor = forwardRef<LiveMarkdownEditorHandle, LiveMarkdownEdit
         extensions: [
           StarterKit.configure({
             link: {
+              autolink: true,
+              linkOnPaste: true,
               openOnClick: false,
               HTMLAttributes: {
                 class: 'markdown-link',
@@ -119,6 +135,9 @@ const LiveMarkdownEditor = forwardRef<LiveMarkdownEditorHandle, LiveMarkdownEdit
         editorProps: {
           attributes: {
             class: 'markdown-preview focus:outline-none p-5 min-h-full text-left',
+          },
+          handleDOMEvents: {
+            click: (view, event) => openClickedLink(event, view.dom),
           },
         },
       },

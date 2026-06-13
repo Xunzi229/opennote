@@ -9,7 +9,7 @@ import {
   MAX_CONTEXT_MENU_NOTES,
 } from './contextMenuConstants';
 import type { Note } from '../types';
-import { siteRootId, WORKSPACE_KEY } from './storage';
+import { siteRootId, REV_KEY } from './storage';
 import { t } from '../i18n';
 
 const dynamicMenuIds = new Set<string>();
@@ -198,7 +198,7 @@ export function registerContextMenuRefreshListeners() {
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes[WORKSPACE_KEY]) return;
+    if (area !== 'local' || !changes[REV_KEY]) return;
     invalidateContextMenuCache();
     refreshContextMenuForActiveTab();
   });

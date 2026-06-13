@@ -52,11 +52,6 @@ vi.stubGlobal('chrome', {
         callback?.();
         return Promise.resolve();
       }),
-      getBytesInUse: vi.fn((_keys: string | string[] | null, callback?: (bytes: number) => void) => {
-        callback?.(2048);
-        return Promise.resolve(2048);
-      }),
-      QUOTA_BYTES: 10485760,
     },
     onChanged: {
       addListener: vi.fn(),
@@ -159,11 +154,45 @@ describe('workspace storage utilities', () => {
     expect(markdown).toContain('hello markdown');
   });
 
-  it('returns local workspace storage usage', async () => {
-    await expect(getWorkspaceStorageUsage()).resolves.toEqual({
-      bytesInUse: 2048,
-      quotaBytes: 10485760,
+  it('reports workspace storage usage via navigator.storage.estimate', async () => {
+    const estimate = vi.fn().mockResolvedValue({ usage: 4096, quota: 50_000_000 });
+    const originalStorage = navigator.storage;
+    Object.defineProperty(navigator, 'storage', {
+      value: { estimate },
+      configurable: true,
     });
+
+    await expect(getWorkspaceStorageUsage()).resolves.toEqual({
+      bytesInUse: 4096,
+      quotaBytes: 50_000_000,
+    });
+    expect(estimate).toHaveBeenCalled();
+
+    if (originalStorage) {
+      Object.defineProperty(navigator, 'storage', {
+        value: originalStorage,
+        configurable: true,
+      });
+    } else {
+      delete (navigator as { storage?: unknown }).storage;
+    }
+  });
+
+  it('falls back to estimating usage from stored pages without navigator.storage', async () => {
+    const originalStorage = navigator.storage;
+    delete (navigator as { storage?: unknown }).storage;
+
+    await addPage('example.com', null, 'content', 'Page');
+    const usage = await getWorkspaceStorageUsage();
+    expect(usage.bytesInUse).toBeGreaterThan(0);
+    expect(usage.quotaBytes).toBeUndefined();
+
+    if (originalStorage) {
+      Object.defineProperty(navigator, 'storage', {
+        value: originalStorage,
+        configurable: true,
+      });
+    }
   });
 
   it('does not crash when workspace change events are unavailable', () => {

@@ -4,11 +4,18 @@ import {
   serializeWorkspaceBackup,
   serializeWorkspaceMarkdown,
 } from './noteBackup';
+import { idbGetAllPages, idbGetKv, idbWrite } from './idb';
 
 export const WORKSPACE_KEY = 'workspace';
+// Small change-signal key kept in chrome.storage.local. IndexedDB has no
+// cross-context change events, so writers bump this value and every context
+// (panel UI, background cache, context menu) listens for it and re-reads IDB.
+export const REV_KEY = 'workspace_rev';
+const ROOT_IDS_KEY = 'rootIds';
 const META_KEY = 'meta';
 let workspaceWriteQueue: Promise<unknown> = Promise.resolve();
 const memoryStorage: Record<string, unknown> = {};
+let revCounter = 0;
 
 export interface StorageUsage {
   bytesInUse: number;
@@ -33,25 +40,65 @@ function normalizeWorkspace(workspace: WorkspaceStore | undefined): WorkspaceSto
   return { pages: workspace.pages, rootIds };
 }
 
-export async function getWorkspace(): Promise<WorkspaceStore> {
-  const storage = getLocalStorageArea();
-  if (!storage?.get) {
-    return normalizeWorkspace(memoryStorage[WORKSPACE_KEY] as WorkspaceStore | undefined);
-  }
+// --- One-time migration from the legacy single-key chrome.storage workspace ---
 
-  const result = await storage.get(WORKSPACE_KEY);
-  return normalizeWorkspace(result[WORKSPACE_KEY] as WorkspaceStore | undefined);
-}
+let migrated = false;
+let migratePromise: Promise<void> | null = null;
 
-export async function setWorkspace(workspace: WorkspaceStore): Promise<void> {
-  const storage = getLocalStorageArea();
-  if (!storage?.set) {
-    memoryStorage[WORKSPACE_KEY] = normalizeWorkspace(workspace);
+async function doMigrate(): Promise<void> {
+  // If IDB already holds the rootIds marker, the migration ran before.
+  const existingRootIds = await idbGetKv<string[]>(ROOT_IDS_KEY);
+  if (existingRootIds !== undefined) {
+    migrated = true;
     return;
   }
 
+  const area = getLocalStorageArea();
+  let legacy: WorkspaceStore | undefined;
+  if (area?.get) {
+    const result = await area.get(WORKSPACE_KEY);
+    legacy = result[WORKSPACE_KEY] as WorkspaceStore | undefined;
+  }
+
+  if (legacy?.pages && Array.isArray(legacy.rootIds)) {
+    const normalized = normalizeWorkspace(legacy);
+    const pages = Object.values(normalized.pages);
+    await idbWrite({ clearAll: true, putPages: pages, kv: { [ROOT_IDS_KEY]: normalized.rootIds } });
+
+    // Verify before trusting the migration. If counts mismatch, leave the
+    // legacy key intact and surface an error rather than silently losing data.
+    const writtenPages = await idbGetAllPages();
+    if (writtenPages.length !== pages.length) {
+      throw new Error('IndexedDB migration verification failed');
+    }
+    // The legacy "workspace" key is intentionally left in place for one release
+    // as a safety net; it is cleaned up in a later version.
+  } else {
+    // No legacy data: write an empty marker so future reads skip migration.
+    await idbWrite({ kv: { [ROOT_IDS_KEY]: [] } });
+  }
+
+  migrated = true;
+}
+
+function migrateFromChromeStorageIfNeeded(): Promise<void> {
+  if (migrated) return Promise.resolve();
+  if (!migratePromise) {
+    migratePromise = doMigrate().finally(() => {
+      migratePromise = null;
+    });
+  }
+  return migratePromise;
+}
+
+async function bumpRevision(): Promise<void> {
+  const area = getLocalStorageArea();
+  if (!area?.set) return;
+  // Use a monotonic, never-repeating value so onChanged always fires even for
+  // multiple writes within the same millisecond.
+  const value = `${Date.now()}-${(revCounter += 1)}`;
   return new Promise((resolve, reject) => {
-    storage.set({ [WORKSPACE_KEY]: normalizeWorkspace(workspace) }, () => {
+    area.set({ [REV_KEY]: value }, () => {
       const lastError = getRuntimeLastError();
       if (lastError) {
         reject(lastError);
@@ -60,6 +107,28 @@ export async function setWorkspace(workspace: WorkspaceStore): Promise<void> {
       }
     });
   });
+}
+
+export async function getWorkspace(): Promise<WorkspaceStore> {
+  await migrateFromChromeStorageIfNeeded();
+  const [pages, rootIds] = await Promise.all([
+    idbGetAllPages(),
+    idbGetKv<string[]>(ROOT_IDS_KEY),
+  ]);
+  const pageMap: Record<string, PageNode> = {};
+  for (const page of pages) pageMap[page.id] = page;
+  return normalizeWorkspace({ pages: pageMap, rootIds: rootIds ?? [] });
+}
+
+export async function setWorkspace(workspace: WorkspaceStore): Promise<void> {
+  const normalized = normalizeWorkspace(workspace);
+  await idbWrite({
+    clearAll: true,
+    putPages: Object.values(normalized.pages),
+    kv: { [ROOT_IDS_KEY]: normalized.rootIds },
+  });
+  migrated = true;
+  await bumpRevision();
 }
 
 function queueWorkspaceWrite<T>(operation: () => Promise<T>): Promise<T> {
@@ -135,8 +204,12 @@ function ensureSiteRootInWorkspace(workspace: WorkspaceStore, hostname: string):
 export async function ensureSiteRoot(hostname: string): Promise<PageNode> {
   return queueWorkspaceWrite(async () => {
     const workspace = await getWorkspace();
+    const rootsBefore = workspace.rootIds.length;
     const root = ensureSiteRootInWorkspace(workspace, hostname);
-    await setWorkspace(workspace);
+    if (workspace.rootIds.length !== rootsBefore) {
+      await idbWrite({ putPages: [root], kv: { [ROOT_IDS_KEY]: workspace.rootIds } });
+      await bumpRevision();
+    }
     return root;
   });
 }
@@ -150,7 +223,9 @@ export async function addPage(
 ): Promise<PageNode> {
   return queueWorkspaceWrite(async () => {
     const workspace = await getWorkspace();
+    const rootsBefore = workspace.rootIds.length;
     const root = ensureSiteRootInWorkspace(workspace, hostname);
+    const rootCreated = workspace.rootIds.length !== rootsBefore;
     const resolvedParentId = parentId && workspace.pages[parentId] ? parentId : root.id;
     const parent = workspace.pages[resolvedParentId] ?? root;
     const now = Date.now();
@@ -172,8 +247,14 @@ export async function addPage(
     };
 
     workspace.pages[page.id] = page;
-    workspace.pages[parent.id] = { ...parent, collapsed: false, updatedAt: now };
-    await setWorkspace(workspace);
+    const updatedParent = { ...parent, collapsed: false, updatedAt: now };
+    workspace.pages[parent.id] = updatedParent;
+
+    await idbWrite({
+      putPages: [page, updatedParent],
+      ...(rootCreated ? { kv: { [ROOT_IDS_KEY]: workspace.rootIds } } : {}),
+    });
+    await bumpRevision();
     return page;
   });
 }
@@ -183,8 +264,9 @@ export async function updatePageContent(id: string, content: NoteContent): Promi
     const workspace = await getWorkspace();
     const page = workspace.pages[id];
     if (!page) return;
-    workspace.pages[id] = { ...page, content, updatedAt: Date.now() };
-    await setWorkspace(workspace);
+    const updated = { ...page, content, updatedAt: Date.now() };
+    await idbWrite({ putPages: [updated] });
+    await bumpRevision();
   });
 }
 
@@ -193,8 +275,9 @@ export async function updatePageTitle(id: string, title: string): Promise<void> 
     const workspace = await getWorkspace();
     const page = workspace.pages[id];
     if (!page || page.type === 'site') return;
-    workspace.pages[id] = { ...page, title: title.trim() || 'Untitled', updatedAt: Date.now() };
-    await setWorkspace(workspace);
+    const updated = { ...page, title: title.trim() || 'Untitled', updatedAt: Date.now() };
+    await idbWrite({ putPages: [updated] });
+    await bumpRevision();
   });
 }
 
@@ -206,8 +289,9 @@ export async function updatePageMeta(
     const workspace = await getWorkspace();
     const page = workspace.pages[id];
     if (!page) return;
-    workspace.pages[id] = { ...page, ...meta, updatedAt: Date.now() };
-    await setWorkspace(workspace);
+    const updated = { ...page, ...meta, updatedAt: Date.now() };
+    await idbWrite({ putPages: [updated] });
+    await bumpRevision();
   });
 }
 
@@ -226,11 +310,14 @@ export async function deletePage(id: string): Promise<void> {
     };
     collect(id);
 
-    for (const pageId of idsToDelete) {
-      delete workspace.pages[pageId];
-    }
-    workspace.rootIds = workspace.rootIds.filter((rootId) => !idsToDelete.has(rootId));
-    await setWorkspace(workspace);
+    const nextRootIds = workspace.rootIds.filter((rootId) => !idsToDelete.has(rootId));
+    const rootIdsChanged = nextRootIds.length !== workspace.rootIds.length;
+
+    await idbWrite({
+      deletePageIds: [...idsToDelete],
+      ...(rootIdsChanged ? { kv: { [ROOT_IDS_KEY]: nextRootIds } } : {}),
+    });
+    await bumpRevision();
   });
 }
 
@@ -244,28 +331,39 @@ export async function movePage(id: string, newParentId: string): Promise<void> {
 
     const movedAt = Date.now();
     const nextSite = parent.site;
+    const changed: PageNode[] = [];
+
     const updateSubtreeSite = (pageId: string) => {
       const current = workspace.pages[pageId];
       if (!current) return;
-      workspace.pages[pageId] = { ...current, site: nextSite, updatedAt: movedAt };
+      const updated = { ...current, site: nextSite, updatedAt: movedAt };
+      workspace.pages[pageId] = updated;
+      changed.push(updated);
       for (const child of getChildren(workspace, pageId)) {
         updateSubtreeSite(child.id);
       }
     };
 
-    workspace.pages[id] = {
+    const movedPage = {
       ...page,
       parentId: parent.id,
       site: nextSite,
       sortIndex: getChildren(workspace, parent.id).length,
       updatedAt: movedAt,
     };
-    workspace.pages[parent.id] = { ...parent, collapsed: false, updatedAt: movedAt };
+    workspace.pages[id] = movedPage;
+    changed.push(movedPage);
+
+    const updatedParent = { ...parent, collapsed: false, updatedAt: movedAt };
+    workspace.pages[parent.id] = updatedParent;
+    changed.push(updatedParent);
+
     for (const child of getChildren(workspace, id)) {
       updateSubtreeSite(child.id);
     }
 
-    await setWorkspace(workspace);
+    await idbWrite({ putPages: changed });
+    await bumpRevision();
   });
 }
 
@@ -284,37 +382,28 @@ export async function exportWorkspaceMarkdown(exportedAt = Date.now()): Promise<
 export async function importWorkspaceBackup(json: string): Promise<WorkspaceStore> {
   const workspace = parseWorkspaceBackup(json);
   return queueWorkspaceWrite(async () => {
-    await setWorkspace(workspace);
-    return workspace;
+    const normalized = normalizeWorkspace(workspace);
+    await idbWrite({
+      clearAll: true,
+      putPages: Object.values(normalized.pages),
+      kv: { [ROOT_IDS_KEY]: normalized.rootIds },
+    });
+    migrated = true;
+    await bumpRevision();
+    return normalized;
   });
 }
 
 export async function getWorkspaceStorageUsage(): Promise<StorageUsage> {
-  const storage = getLocalStorageArea();
-  if (!storage?.getBytesInUse) {
-    return {
-      bytesInUse: new TextEncoder().encode(JSON.stringify(memoryStorage[WORKSPACE_KEY] ?? {})).length,
-    };
+  if (typeof navigator !== 'undefined' && navigator.storage?.estimate) {
+    const { usage, quota } = await navigator.storage.estimate();
+    return { bytesInUse: usage ?? 0, quotaBytes: quota };
   }
 
-  const bytesInUse = await new Promise<number>((resolve, reject) => {
-    storage.getBytesInUse(WORKSPACE_KEY, (bytes) => {
-      const lastError = getRuntimeLastError();
-      if (lastError) {
-        reject(lastError);
-      } else {
-        resolve(bytes);
-      }
-    });
-  });
-  const localStorageArea = storage as typeof chrome.storage.local & {
-    QUOTA_BYTES?: number;
-  };
-
-  return {
-    bytesInUse,
-    quotaBytes: localStorageArea.QUOTA_BYTES,
-  };
+  // Fallback: estimate from the serialized page set.
+  const pages = await idbGetAllPages();
+  const bytesInUse = new TextEncoder().encode(JSON.stringify(pages)).length;
+  return { bytesInUse };
 }
 
 export function onWorkspaceChange(callback: (workspace: WorkspaceStore) => void): () => void {
@@ -323,10 +412,9 @@ export function onWorkspaceChange(callback: (workspace: WorkspaceStore) => void)
     return () => undefined;
   }
 
-  const listener = (changes: { [key: string]: chrome.storage.StorageChange }) => {
-    if (changes[WORKSPACE_KEY]) {
-      callback(normalizeWorkspace(changes[WORKSPACE_KEY].newValue as WorkspaceStore | undefined));
-    }
+  const listener = (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string) => {
+    if (areaName !== 'local' || !changes[REV_KEY]) return;
+    void getWorkspace().then(callback);
   };
   storageEvents.addListener(listener);
   return () => storageEvents.removeListener(listener);
@@ -352,6 +440,13 @@ export const exportNotesMarkdown = exportWorkspaceMarkdown;
 export const importNotesBackup = importWorkspaceBackup;
 export const getNotesStorageUsage = getWorkspaceStorageUsage;
 export const onNotesChange = onWorkspaceChange;
+
+// Test-only: reset the one-time migration guard so each test starts clean.
+export function __resetStorageForTests(): void {
+  migrated = false;
+  migratePromise = null;
+  for (const key of Object.keys(memoryStorage)) delete memoryStorage[key];
+}
 
 function getLocalStorageArea(): typeof chrome.storage.local | undefined {
   if (typeof chrome === 'undefined') return undefined;

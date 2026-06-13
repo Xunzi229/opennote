@@ -1,5 +1,17 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { beforeEach, vi } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
+import { __resetIdbForTests } from '../lib/idb';
+import { __resetStorageForTests } from '../lib/storage';
+
+// Give every test a real (in-memory) IndexedDB and a clean slate. A fresh
+// IDBFactory drops all databases; resetting the wrappers clears cached
+// connections and the one-time migration guard.
+beforeEach(() => {
+  globalThis.indexedDB = new IDBFactory();
+  __resetIdbForTests();
+  __resetStorageForTests();
+});
 
 Object.defineProperty(navigator, 'language', {
   value: 'zh-CN',

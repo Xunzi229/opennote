@@ -1,5 +1,5 @@
 import type { WorkspaceStore } from '../types';
-import { getWorkspace, WORKSPACE_KEY, createEmptyWorkspace } from './storage';
+import { getWorkspace, REV_KEY, createEmptyWorkspace } from './storage';
 
 let cache: WorkspaceStore = createEmptyWorkspace();
 let initialized = false;
@@ -18,10 +18,14 @@ export function initNotesCache() {
 export function bindNotesCacheSync() {
   void initNotesCache();
 
+  // The workspace now lives in IndexedDB; the change-signal key only tells us
+  // when to re-read it. Re-fetch the full workspace on every signal.
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes[WORKSPACE_KEY]) return;
-    cache = (changes[WORKSPACE_KEY].newValue as WorkspaceStore) || createEmptyWorkspace();
-    initialized = true;
+    if (area !== 'local' || !changes[REV_KEY]) return;
+    void getWorkspace().then((workspace) => {
+      cache = workspace;
+      initialized = true;
+    });
   });
 }
 

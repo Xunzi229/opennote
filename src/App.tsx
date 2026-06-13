@@ -5,6 +5,7 @@ import { useNotesStore } from './store/notesStore';
 import { useSyncSiteWithActiveTab } from './hooks/useSyncSiteWithActiveTab';
 import { usePersistedPanelVisibility } from './hooks/usePersistedPanelVisibility';
 import { usePendingNoteSelect, useExtensionLifecycle } from './hooks/usePendingNoteSelect';
+import { useAutoSync } from './hooks/useAutoSync';
 import { t, useLocale } from './i18n';
 
 const Sidebar = lazy(() => import('./components/Sidebar'));
@@ -22,6 +23,7 @@ function App() {
   useSyncSiteWithActiveTab();
   useExtensionLifecycle();
   usePendingNoteSelect();
+  useAutoSync();
 
   useEffect(() => {
     if (!canLoadPanels) return;

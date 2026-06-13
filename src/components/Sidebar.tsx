@@ -13,6 +13,7 @@ import {
   Languages,
   Pin,
   Plus,
+  RefreshCw,
   Search,
   SlidersHorizontal,
   Star,
@@ -34,6 +35,7 @@ import { normalizeSiteInput } from '../lib/siteInput';
 import { getSiteFaviconUrl } from '../lib/favicon';
 import type { PageFilter, PageNode } from '../types';
 import PromptDialog from './PromptDialog';
+import SyncSettingsDialog from './SyncSettingsDialog';
 import { t, useLocale, localeLabels, availableLocales } from '../i18n';
 
 const TREE_ROW_HEIGHT = 34;
@@ -93,6 +95,7 @@ export default function Sidebar() {
   const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
   const [showAddSiteDialog, setShowAddSiteDialog] = useState(false);
   const [addSiteInput, setAddSiteInput] = useState('');
+  const [showSyncDialog, setShowSyncDialog] = useState(false);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [isQuickSettingsOpen, setIsQuickSettingsOpen] = useState(false);
@@ -902,6 +905,16 @@ export default function Sidebar() {
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => setShowSyncDialog(true)}
+              className="btn btn-secondary btn-icon w-[34px] h-[34px]"
+              title={t('syncTitle')}
+              aria-label={t('syncTitle')}
+              data-testid="sync-settings-button"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
           </div>
 
           <div className="footer-data-grid">
@@ -978,6 +991,11 @@ export default function Sidebar() {
           setShowAddSiteDialog(false);
           setAddSiteInput('');
         }}
+      />
+
+      <SyncSettingsDialog
+        isOpen={showSyncDialog}
+        onClose={() => setShowSyncDialog(false)}
       />
     </>
   );

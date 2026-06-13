@@ -115,11 +115,43 @@ type NoteSortMode = PageSortMode;
 
 ## 持久化布局
 
-`chrome.storage.local` 中实际只有两个键：
+数据存储分两层：页面数据在 **IndexedDB**，少量配置与变更信号在 `chrome.storage.local`。
+
+### IndexedDB（`opennote` 数据库，version 1）
+
+| Object Store | keyPath | 内容 |
+| --- | --- | --- |
+| `pages` | `id` | 每个 `PageNode` 一条记录（站点 + 页面） |
+| `kv` | `key` | `{ key: 'rootIds', value: string[] }` —— 站点根 id 列表 |
+
+封装见 `src/lib/idb.ts`：所有写入（`put` / `delete` / 全量替换）都在**单个 `readwrite` 事务**内完成以保证原子性；无 IndexedDB 环境（部分测试 / SW 边缘场景）时退回内存 Map。
+
+每次改动只 `put` / `delete` **受影响的页面**，不再整库覆盖。删除子树用一个事务批量 `delete`。
+
+### chrome.storage.local
 
 | 键 | 内容 |
 | --- | --- |
-| `workspace` | `WorkspaceStore`（全部站点与页面） |
+| `workspace_rev` | 变更信号（单调递增字符串），写完 IDB 后递增 |
 | `meta` | `MetaStore`（UI 偏好、版本） |
+| `workspace` | **旧版遗留键**，迁移后默认保留一版作为安全网，下个版本清理 |
 
-所有节点存在同一个 `workspace.pages` 映射里 —— 这意味着每次写入是整库覆盖（经 `queueWorkspaceWrite` 串行化）。备份导出的 JSON 格式标记为 `opennote.workspace.v1`。
+### 跨上下文同步
+
+IndexedDB 没有跨上下文变更事件，因此各上下文（面板 UI store、后台 `notesCache`、右键 `contextMenu`）统一监听 `chrome.storage.onChanged` 中的 `workspace_rev` 信号，触发后重新 `getWorkspace()` 从 IDB 读取。写入方在事务完成后调用 `bumpRevision()` 递增信号。
+
+### 一次性迁移
+
+首次调用 `getWorkspace()` 时，`migrateFromChromeStorageIfNeeded()` 把旧的 `chrome.storage.local.workspace` 整库搬入 IndexedDB：
+
+1. 若 IDB 已有 `rootIds` 标记 → 已迁移过，跳过。
+2. 读取旧 `workspace` → 单事务写入 IDB → **校验页面数量一致**才视为成功；不一致则抛错并保留旧数据，绝不静默丢失。
+3. 旧 `workspace` 键**不删除**，作为回滚安全网保留一个版本。
+
+### 存储用量
+
+`getWorkspaceStorageUsage()` 改用 `navigator.storage.estimate()` 读取磁盘配额；无该 API 时退回按序列化页面估算。
+
+### 备份格式
+
+备份导出的 JSON 格式标记为 `opennote.workspace.v1`（导入逻辑不变，见 `lib/noteBackup.ts`）。

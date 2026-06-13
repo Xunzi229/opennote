@@ -6,7 +6,6 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronRight,
-  Download,
   FileText,
   Filter,
   Globe2,
@@ -18,15 +17,11 @@ import {
   SlidersHorizontal,
   Star,
   Trash2,
-  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  exportWorkspaceBackup,
-  exportWorkspaceMarkdown,
   getMeta,
   getWorkspaceStorageUsage,
-  importWorkspaceBackup,
   setMeta,
   siteRootId,
   type StorageUsage,
@@ -77,7 +72,6 @@ export default function Sidebar() {
     visibleTreeRows,
     ensureSiteRoot,
     currentSite,
-    loadWorkspace,
   } = useNotesStore();
 
   const actualCurrentSite = useActiveSite();
@@ -102,7 +96,6 @@ export default function Sidebar() {
   const [quickSectionPrefs, setQuickSectionPrefs] = useState<QuickSectionPreferences>(DEFAULT_QUICK_SECTION_PREFS);
   const [treeScrollTop, setTreeScrollTop] = useState(0);
   const [treeViewportHeight, setTreeViewportHeight] = useState(0);
-  const importInputRef = useRef<HTMLInputElement>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
   const quickSettingsMenuRef = useRef<HTMLDivElement>(null);
@@ -345,45 +338,6 @@ export default function Sidebar() {
       current = current.parentId ? useNotesStore.getState().getPage(current.parentId) : null;
     }
     return true;
-  };
-
-  const handleExportWorkspace = async () => {
-    try {
-      const json = await exportWorkspaceBackup();
-      const date = new Date().toISOString().slice(0, 10);
-      downloadTextFile(json, `opennote-workspace-${date}.json`, 'application/json');
-      toast.success(t('workspaceExported'));
-    } catch {
-      toast.error(t('exportFailed'));
-    }
-  };
-
-  const handleExportMarkdown = async () => {
-    try {
-      const markdown = await exportWorkspaceMarkdown();
-      const date = new Date().toISOString().slice(0, 10);
-      downloadTextFile(markdown, `opennote-workspace-${date}.md`, 'text/markdown');
-      toast.success(t('markdownExported'));
-    } catch {
-      toast.error(t('markdownExportFailed'));
-    }
-  };
-
-  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-
-    const confirmed = window.confirm(t('importConfirm'));
-    if (!confirmed) return;
-
-    try {
-      await importWorkspaceBackup(await file.text());
-      await loadWorkspace();
-      toast.success(t('workspaceImported'));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : t('importFailed'));
-    }
   };
 
   const filters: { id: PageFilter; label: string }[] = [
@@ -917,31 +871,6 @@ export default function Sidebar() {
             </button>
           </div>
 
-          <div className="footer-data-grid">
-            <button onClick={handleExportWorkspace} className="btn btn-secondary w-full !px-2" title={t('exportJsonBackup')}>
-              <Download className="w-4 h-4" />
-              JSON
-            </button>
-            <button onClick={handleExportMarkdown} className="btn btn-secondary w-full !px-2" title={t('exportMarkdown')}>
-              <FileText className="w-4 h-4" />
-              MD
-            </button>
-            <button
-              onClick={() => importInputRef.current?.click()}
-              className="btn btn-secondary w-full !px-2"
-              title={t('importJsonBackup')}
-            >
-              <Upload className="w-4 h-4" />
-              {t('import')}
-            </button>
-          </div>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={handleImportFile}
-          />
           {usageText && <div className="storage-usage">{t('localStorageUsed', { usage: usageText })}</div>}
         </div>
       </aside>
@@ -1035,14 +964,4 @@ function formatBytes(bytes: number): string {
   const kilobytes = bytes / 1024;
   if (kilobytes < 1024) return `${kilobytes.toFixed(1)} KB`;
   return `${(kilobytes / 1024).toFixed(1)} MB`;
-}
-
-function downloadTextFile(content: string, filename: string, type: string) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }

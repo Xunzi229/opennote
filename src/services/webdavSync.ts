@@ -80,18 +80,22 @@ export async function pushToWebdav(config?: WebdavConfig): Promise<PushResult> {
   let skipped = 0;
   const now = Date.now();
   const nextIndex: SyncIndex = { version: 1, updatedAt: now, files: {} };
-  const nextStateFiles: Record<string, string> = {};
+  const nextStateFiles: Record<string, import('../lib/syncConfig').FileSyncEntry> = {};
 
   // Upload changed/new files.
   for (const [key, content] of localFiles) {
     const hash = hashString(content);
-    nextIndex.files[key] = { hash, updatedAt: now };
-    nextStateFiles[key] = hash;
+    const existing = syncState.files[key];
+    const version = (existing?.hash === hash ? existing.version : (existing?.version ?? 0) + 1);
+    nextIndex.files[key] = { hash, updatedAt: now, version };
+    nextStateFiles[key] = { hash, version, lastSyncTime: now };
 
-    if (syncState.files[key] === hash) {
+    if (existing?.hash === hash) {
+      nextStateFiles[key] = existing;
       skipped += 1;
       continue;
     }
+
     await uploadFile(remotePathForKey(resolved.directory, key), content, conn);
     uploaded.push(key);
   }
@@ -104,7 +108,7 @@ export async function pushToWebdav(config?: WebdavConfig): Promise<PushResult> {
     deleted.push(key);
   }
 
-  // Upload the index last so it reflects a completed push.
+  // Upload the index last so it reflects a copleted push.
   await uploadFile(indexRemotePath(resolved.directory), serializeStable(nextIndex), conn);
   await saveSyncState({ files: nextStateFiles, lastSyncedAt: now });
 
@@ -157,17 +161,25 @@ export async function pullFromWebdav(config?: WebdavConfig): Promise<PullResult>
 
   // Align sync state with what we just pulled so the next auto-push is a no-op
   // (no flag needed to suppress the upload that the workspace change triggers).
-  const nextStateFiles: Record<string, string> = {};
+  const now = Date.now();
+  const nextStateFiles: Record<string, import('../lib/syncConfig').FileSyncEntry> = {};
   for (const [key, entry] of Object.entries(index.files ?? {})) {
-    nextStateFiles[key] = entry.hash;
+    nextStateFiles[key] = {
+      hash: entry.hash,
+      version: entry.version ?? 0,
+      lastSyncTime: now,
+    };
   }
-  await saveSyncState({ files: nextStateFiles, lastSyncedAt: Date.now() });
+  await saveSyncState({ files: nextStateFiles, lastSyncedAt: now });
 
   return { downloaded, applied: true };
 }
 
+const STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
 // Lightweight pull that only downloads files whose hash differs from local
-// sync state. When nothing changed this is a single PROPFIND/GET for index.json.
+// sync state, OR whose last successful sync was more than STALE_THRESHOLD_MS ago.
+// When nothing changed this is a single GET for index.json.
 // If no remote backup exists yet, this is a no-op (used by pull-before-edit).
 export async function pullIncremental(config?: WebdavConfig): Promise<PullResult> {
   const resolved = config ?? (await loadWebdavConfig());
@@ -179,11 +191,21 @@ export async function pullIncremental(config?: WebdavConfig): Promise<PullResult
   if (!indexJson) return { downloaded: [], applied: false }; // no remote yet
 
   const index = JSON.parse(indexJson) as SyncIndex;
+  const now = Date.now();
   const changedKeys: string[] = [];
 
   for (const [key, entry] of Object.entries(index.files ?? {})) {
-    if (syncState.files[key] === entry.hash) continue;
-    changedKeys.push(key);
+    const local = syncState.files[key];
+    // No local record — new file, must download.
+    if (!local) { changedKeys.push(key); continue; }
+    // Hash differs — content changed.
+    if (local.hash !== entry.hash) { changedKeys.push(key); continue; }
+    // Stale — last sync was > 30 min ago, force re-check.
+    if (local.lastSyncTime > 0 && (now - local.lastSyncTime) > STALE_THRESHOLD_MS) {
+      changedKeys.push(key);
+      continue;
+    }
+    // Hash matches AND within freshness window — skip.
   }
 
   if (changedKeys.length === 0) return { downloaded: [], applied: true };
@@ -230,11 +252,18 @@ export async function pullIncremental(config?: WebdavConfig): Promise<PullResult
     }
   }
 
-  const nextStateFiles: Record<string, string> = {};
+  const nextStateFiles: Record<string, import('../lib/syncConfig').FileSyncEntry> = {};
   for (const [key, entry] of Object.entries(index.files ?? {})) {
-    nextStateFiles[key] = entry.hash;
+    const local = syncState.files[key];
+    // Preserve the per-file sync time for files we didn't actually download
+    // this round (they were still fresh). For downloaded files, bump the clock.
+    nextStateFiles[key] = {
+      hash: entry.hash,
+      version: entry.version ?? 0,
+      lastSyncTime: downloaded.includes(key) ? now : (local?.lastSyncTime ?? 0),
+    };
   }
-  await saveSyncState({ files: nextStateFiles, lastSyncedAt: Date.now() });
+  await saveSyncState({ files: nextStateFiles, lastSyncedAt: now });
 
   return { downloaded, applied: true };
 }

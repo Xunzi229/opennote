@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceStore } from '../types';
+import type { FileSyncEntry } from '../lib/syncConfig';
 
 // In-memory remote + local stores controlled by the mocks below.
 const remote = new Map<string, string>();
 let workspace: WorkspaceStore;
-let syncStateFiles: Record<string, string>;
+let syncStateFiles: Record<string, FileSyncEntry>;
 let syncStateLastSyncedAt: number | null;
+
+const now = Date.now();
 
 vi.mock('../lib/webdav', () => ({
   uploadFile: vi.fn(async (path: string, content: string) => {
@@ -30,7 +33,7 @@ vi.mock('../lib/syncConfig', async () => {
       enabled: true,
     })),
     loadSyncState: vi.fn(async () => ({ files: { ...syncStateFiles }, lastSyncedAt: syncStateLastSyncedAt })),
-    saveSyncState: vi.fn(async (state: { files: Record<string, string>; lastSyncedAt: number | null }) => {
+    saveSyncState: vi.fn(async (state: { files: Record<string, FileSyncEntry>; lastSyncedAt: number | null }) => {
       syncStateFiles = { ...state.files };
       syncStateLastSyncedAt = state.lastSyncedAt;
     }),
@@ -148,6 +151,40 @@ describe('webdav sync push/pull', () => {
 
   it('throws on pull when no remote backup exists', async () => {
     await expect(pullFromWebdav()).rejects.toThrow();
+  });
+
+  // Regression: push increments per-file version numbers.
+  it('push increments per-file version and tracks lastSyncTime', async () => {
+    await pushToWebdav();
+    const stateA = syncStateFiles['sites/a.com'];
+    expect(stateA.version).toBe(1);
+    expect(stateA.lastSyncTime).toBeGreaterThan(now);
+
+    // Modify a.com → push again → version increments.
+    workspace.pages.p1 = { ...workspace.pages.p1, content: 'changed', updatedAt: 99 };
+    await pushToWebdav();
+    const stateA2 = syncStateFiles['sites/a.com'];
+    expect(stateA2.version).toBe(2);
+
+    // b.com unchanged → version stays at 1.
+    const stateB = syncStateFiles['sites/b.com'];
+    expect(stateB.version).toBe(1);
+  });
+
+  // Regression: files whose hash matches but lastSyncTime is older than
+  // 30 min must be force-rechecked (stale pull).
+  it('pullIncremental force-rechecks files that are >30 min stale', async () => {
+    await pushToWebdav();
+    // Simulate sync state with stale lastSyncTime on a.com (>30 min ago).
+    const staleMs = 31 * 60 * 1000;
+    syncStateFiles['sites/a.com'] = {
+      ...syncStateFiles['sites/a.com'],
+      lastSyncTime: now - staleMs,
+    };
+
+    const result = await pullIncremental();
+    // Even though hash still matches, the stale file must be re-downloaded.
+    expect(result.downloaded).toContain('sites/a.com');
   });
 
   // Regression: pullIncremental must MERGE downloaded files into the existing

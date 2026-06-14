@@ -8,9 +8,16 @@ export interface WebdavConfig {
   enabled: boolean; // whether debounced auto-upload is active
 }
 
+export interface FileSyncEntry {
+  hash: string;
+  version: number;      // starts at 0, incremented on each successful push
+  lastSyncTime: number; // timestamp of last successful push or pull for this file
+}
+
 export interface WebdavSyncState {
-  // hash of each logical file at last successful sync, keyed by "config" / "sites/<host>"
-  files: Record<string, string>;
+  // hash / version / last-sync of each logical file at last successful sync,
+  // keyed by "config" / "sites/<host>"
+  files: Record<string, FileSyncEntry>;
   lastSyncedAt: number | null;
 }
 
@@ -74,8 +81,27 @@ export function isWebdavConfigured(config: WebdavConfig): boolean {
 export async function loadSyncState(): Promise<WebdavSyncState> {
   const area = getLocalArea();
   const stored = area ? await area.get(SYNC_STATE_KEY) : {};
-  const value = stored[SYNC_STATE_KEY] as WebdavSyncState | undefined;
-  return value ?? { files: {}, lastSyncedAt: null };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const value = stored[SYNC_STATE_KEY] as any;
+  if (!value) return { files: {}, lastSyncedAt: null };
+
+  // Migrate from v1 format where files[key] was a plain hash string.
+  const migratedFiles: Record<string, FileSyncEntry> = {};
+  if (value.files && typeof value.files === 'object') {
+    for (const [key, entry] of Object.entries(value.files)) {
+      if (typeof entry === 'string') {
+        migratedFiles[key] = { hash: entry, version: 0, lastSyncTime: 0 };
+      } else if (entry && typeof entry === 'object' && typeof (entry as FileSyncEntry).hash === 'string') {
+        migratedFiles[key] = {
+          hash: (entry as FileSyncEntry).hash,
+          version: typeof (entry as FileSyncEntry).version === 'number' ? (entry as FileSyncEntry).version : 0,
+          lastSyncTime: typeof (entry as FileSyncEntry).lastSyncTime === 'number' ? (entry as FileSyncEntry).lastSyncTime : 0,
+        };
+      }
+    }
+  }
+
+  return { files: migratedFiles, lastSyncedAt: value.lastSyncedAt ?? null };
 }
 
 export async function saveSyncState(state: WebdavSyncState): Promise<void> {

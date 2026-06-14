@@ -9,7 +9,7 @@ export const SITE_FILE_PREFIX = 'sites/';
 export interface SyncIndex {
   version: 1;
   updatedAt: number;
-  files: Record<string, { hash: string; updatedAt: number }>;
+  files: Record<string, { hash: string; updatedAt: number; version: number }>;
 }
 
 export interface ConfigPayload {

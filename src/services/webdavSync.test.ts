@@ -46,7 +46,7 @@ vi.mock('../lib/storage', () => ({
   setMeta: vi.fn(async () => undefined),
 }));
 
-import { pushToWebdav, pullFromWebdav } from './webdavSync';
+import { pullIncremental, pushToWebdav, pullFromWebdav } from './webdavSync';
 import { uploadFile, deleteFile } from '../lib/webdav';
 
 function page(id: string, site: string, type: 'site' | 'page' = 'page') {
@@ -148,5 +148,36 @@ describe('webdav sync push/pull', () => {
 
   it('throws on pull when no remote backup exists', async () => {
     await expect(pullFromWebdav()).rejects.toThrow();
+  });
+
+  // Regression: pullIncremental must MERGE downloaded files into the existing
+  // workspace, not replace it. Bug: mergeWorkspaceFromSiteFiles + setWorkspace
+  // with only the changed sites would wipe every unchanged site.
+  it('pullIncremental preserves unchanged sites (merge, not replace)', async () => {
+    // 1. Push both sites.
+    await pushToWebdav();
+
+    // 2. Simulate B-device state: workspace only has b.com, sync state only
+    //    knows b.com's hash (as if B had never synced a.com).
+    workspace = {
+      pages: {
+        'site:b.com': page('site:b.com', 'b.com', 'site'),
+        p2: page('p2', 'b.com'),
+      },
+      rootIds: ['site:b.com'],
+    };
+    syncStateFiles = {
+      // In B's sync state: no hash for a.com → pullIncremental sees it as "new"
+      'sites/b.com': syncStateFiles['sites/b.com'],
+    };
+
+    // 3. Pull incremental — should download the missing a.com site file and
+    //    MERGE it into B's workspace (which already has b.com).
+    const result = await pullIncremental();
+
+    expect(result.downloaded).toContain('sites/a.com');
+    // The critical assertion: b.com must survive the pull alongside a.com.
+    expect(Object.keys(workspace.pages).sort()).toEqual(['p1', 'p2', 'site:a.com', 'site:b.com']);
+    expect(workspace.rootIds.sort()).toEqual(['site:a.com', 'site:b.com']);
   });
 });

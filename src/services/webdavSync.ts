@@ -206,7 +206,19 @@ export async function pullIncremental(config?: WebdavConfig): Promise<PullResult
   }
 
   if (siteFiles.length > 0) {
-    const workspace = mergeWorkspaceFromSiteFiles(siteFiles);
+    // Merge changed site files INTO the existing workspace so unchanged sites
+    // are preserved — never wholesale-replace with only the downloaded subset.
+    const workspace = await getWorkspace();
+    for (const file of siteFiles) {
+      for (const page of file.pages) {
+        workspace.pages[page.id] = page;
+      }
+    }
+    // Recompute rootIds in case a new site root arrived in the download.
+    workspace.rootIds = Object.values(workspace.pages)
+      .filter((page) => page.type === 'site')
+      .sort((a, b) => a.sortIndex - b.sortIndex || a.site.localeCompare(b.site))
+      .map((page) => page.id);
     await setWorkspace(workspace);
   }
 

@@ -152,6 +152,8 @@ export const messages = {
     syncPullConfirm: '从云端拉取会用云端数据覆盖本地工作区、界面偏好和语言，确定继续吗？',
     syncNotConfigured: '请先填写 WebDAV 地址、用户名和密码',
     syncSaved: '同步配置已保存',
+    resizeSidebar: '拖动调整侧边栏宽度（双击重置）',
+    syncing: '同步中...',
   },
   'en-US': {
     productName: 'WebNest',
@@ -304,6 +306,8 @@ export const messages = {
     syncPullConfirm: 'Pulling will overwrite your local workspace, UI preferences, and language with cloud data. Continue?',
     syncNotConfigured: 'Enter the WebDAV URL, username, and password first',
     syncSaved: 'Sync settings saved',
+    resizeSidebar: 'Drag to resize sidebar (double-click to reset)',
+    syncing: 'Syncing...',
   },
 } as const;
 

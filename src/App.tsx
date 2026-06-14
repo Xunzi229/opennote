@@ -1,9 +1,10 @@
-﻿import { lazy, Suspense, useEffect, useState } from 'react';
+﻿import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { useNotesStore } from './store/notesStore';
 import { useSyncSiteWithActiveTab } from './hooks/useSyncSiteWithActiveTab';
 import { usePersistedPanelVisibility } from './hooks/usePersistedPanelVisibility';
+import { usePersistedSidebarWidth, DEFAULT_SIDEBAR_WIDTH } from './hooks/usePersistedSidebarWidth';
 import { usePendingNoteSelect, useExtensionLifecycle } from './hooks/usePendingNoteSelect';
 import { useAutoSync } from './hooks/useAutoSync';
 import { t, useLocale } from './i18n';
@@ -18,7 +19,9 @@ function App() {
 
   const { loadWorkspace } = useNotesStore();
   const { showSidebar, setShowSidebar } = usePersistedPanelVisibility();
+  const { sidebarWidth, widthRef, setSidebarWidth, persistSidebarWidth } = usePersistedSidebarWidth();
   const canLoadPanels = useDeferredPanelLoad();
+  const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   useSyncSiteWithActiveTab();
   useExtensionLifecycle();
@@ -30,8 +33,36 @@ function App() {
     loadWorkspace();
   }, [canLoadPanels, loadWorkspace]);
 
+  const handleResizeStart = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      dragStateRef.current = { startX: event.clientX, startWidth: widthRef.current };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [widthRef],
+  );
+
+  const handleResizeMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const drag = dragStateRef.current;
+      if (!drag) return;
+      setSidebarWidth(drag.startWidth + (event.clientX - drag.startX));
+    },
+    [setSidebarWidth],
+  );
+
+  const handleResizeEnd = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!dragStateRef.current) return;
+      dragStateRef.current = null;
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      persistSidebarWidth();
+    },
+    [persistSidebarWidth],
+  );
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={{ '--sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
       {showSidebar ? (
         <div className="panel-group">
           {canLoadPanels ? (
@@ -41,6 +72,17 @@ function App() {
           ) : (
             <WorkspacePanelFallback />
           )}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t('resizeSidebar')}
+            className="panel-resize-handle"
+            onPointerDown={handleResizeStart}
+            onPointerMove={handleResizeMove}
+            onPointerUp={handleResizeEnd}
+            onPointerCancel={handleResizeEnd}
+            onDoubleClick={() => persistSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
+          />
           <button
             type="button"
             onClick={() => setShowSidebar(false)}

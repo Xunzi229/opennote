@@ -179,6 +179,30 @@ textarea {
   color: var(--color-text);
 }
 
+.panel-resize-handle {
+  width: 6px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  touch-action: none;
+  transition: background 160ms ease;
+}
+
+.panel-resize-handle::before {
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 160ms ease;
+}
+
+.panel-resize-handle:hover::before,
+.panel-resize-handle:active::before {
+  background: var(--color-primary-soft);
+}
+
 .workspace-sidebar {
   background: var(--color-sidebar);
   border-right-color: var(--color-border);

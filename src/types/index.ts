@@ -40,6 +40,7 @@ export interface MetaStore {
   showPinnedSection?: boolean;
   favoritesSectionCollapsed?: boolean;
   pinnedSectionCollapsed?: boolean;
+  sidebarWidth?: number;
 }
 
 export type PageFilter = 'all' | 'pinned' | 'favorite' | 'tagged';

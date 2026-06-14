@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNotesStore } from '../store/notesStore';
 import { useActiveSite } from '../hooks/useActiveSite';
 import MarkdownEditor from './MarkdownEditor';
@@ -23,6 +23,8 @@ import {
 import { toast } from 'sonner';
 import PromptDialog from './PromptDialog';
 import { t } from '../i18n';
+import { pushToWebdav, pullIncremental } from '../services/webdavSync';
+import { isWebdavConfigured, loadWebdavConfig } from '../lib/syncConfig';
 
 export default function EditorPanel() {
   const {
@@ -50,7 +52,26 @@ export default function EditorPanel() {
   const [showTagDialog, setShowTagDialog] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const [moreMenuPageId, setMoreMenuPageId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<{ id: string; content: string } | null>(null);
+  const lastPullTimeRef = useRef(0);
+  const PULL_COOLDOWN_MS = 10000;
+
+  const flushPendingSave = useCallback(async () => {
+    if (!saveTimeoutRef.current) return;
+    clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = null;
+    const pending = pendingSaveRef.current;
+    if (!pending) return;
+    pendingSaveRef.current = null;
+    try {
+      await updatePageContent(pending.id, pending.content);
+      setSaveStatus('saved');
+    } catch {
+      setSaveStatus('error');
+    }
+  }, [updatePageContent]);
 
   useEffect(() => {
     return () => {
@@ -60,20 +81,55 @@ export default function EditorPanel() {
     };
   }, []);
 
+  // Pull remote changes before editing the newly selected page, with a cooldown
+  // so rapid page-switching doesn't hammer the server.
+  useEffect(() => {
+    if (!selectedPageId) return;
+    const now = Date.now();
+    if (now - lastPullTimeRef.current < PULL_COOLDOWN_MS) return;
+
+    let cancelled = false;
+    const doPull = async () => {
+      const config = await loadWebdavConfig();
+      if (!cancelled && isWebdavConfigured(config)) {
+        // Flush any unsaved edits from the previously selected page before
+        // pulling remote data, so we don't lose local work.
+        await flushPendingSave();
+        if (cancelled) return;
+        setIsSyncing(true);
+        try {
+          await pullIncremental(config);
+          lastPullTimeRef.current = Date.now();
+        } catch {
+          // Silent; manual sync surfaces errors in the dialog.
+        } finally {
+          if (!cancelled) setIsSyncing(false);
+        }
+      }
+    };
+    void doPull();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPageId, flushPendingSave]);
+
   const debouncedSave = (id: string, content: string) => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
+    pendingSaveRef.current = { id, content };
     setSaveStatus('saving');
     saveTimeoutRef.current = setTimeout(async () => {
+      pendingSaveRef.current = null;
       try {
         await updatePageContent(id, content);
         setSaveStatus('saved');
+        void pushToWebdav().catch(() => {});
       } catch {
         setSaveStatus('error');
         toast.error(t('saveFailed'));
       }
-    }, 1200);
+    }, 5000);
   };
 
   const handleEditorUpdate = (content: string) => {
@@ -302,7 +358,7 @@ export default function EditorPanel() {
             ))}
             {(selectedPage.tags || []).length === 0 && <span className="meta-placeholder">{t('noTagsYet')}</span>}
           </div>
-          <SaveStatusPill status={saveStatus} />
+          <SaveStatusPill status={isSyncing ? 'syncing' : saveStatus} />
         </div>
       </header>
 
@@ -351,7 +407,16 @@ export default function EditorPanel() {
   );
 }
 
-function SaveStatusPill({ status }: { status: 'saved' | 'saving' | 'error' }) {
+function SaveStatusPill({ status }: { status: 'saved' | 'saving' | 'error' | 'syncing' }) {
+  if (status === 'syncing') {
+    return (
+      <span className="save-status-pill is-saving">
+        <LoaderCircle className="w-3.5 h-3.5 animate-spin" />
+        {t('syncing')}
+      </span>
+    );
+  }
+
   if (status === 'saving') {
     return (
       <span className="save-status-pill is-saving">

@@ -165,3 +165,64 @@ export async function pullFromWebdav(config?: WebdavConfig): Promise<PullResult>
 
   return { downloaded, applied: true };
 }
+
+// Lightweight pull that only downloads files whose hash differs from local
+// sync state. When nothing changed this is a single PROPFIND/GET for index.json.
+// If no remote backup exists yet, this is a no-op (used by pull-before-edit).
+export async function pullIncremental(config?: WebdavConfig): Promise<PullResult> {
+  const resolved = config ?? (await loadWebdavConfig());
+  if (!isWebdavConfigured(resolved)) return { downloaded: [], applied: false };
+
+  const conn = toConnection(resolved);
+  const syncState = await loadSyncState();
+  const indexJson = await downloadFile(indexRemotePath(resolved.directory), conn);
+  if (!indexJson) return { downloaded: [], applied: false }; // no remote yet
+
+  const index = JSON.parse(indexJson) as SyncIndex;
+  const changedKeys: string[] = [];
+
+  for (const [key, entry] of Object.entries(index.files ?? {})) {
+    if (syncState.files[key] === entry.hash) continue;
+    changedKeys.push(key);
+  }
+
+  if (changedKeys.length === 0) return { downloaded: [], applied: true };
+
+  const downloaded: string[] = [];
+  const siteFiles: SiteFilePayload[] = [];
+  let configJson: string | null = null;
+
+  for (const key of changedKeys) {
+    const content = await downloadFile(remotePathForKey(resolved.directory, key), conn);
+    if (content === null) continue;
+    downloaded.push(key);
+
+    if (key === CONFIG_FILE_KEY) {
+      configJson = content;
+    } else {
+      const parsed = parseSiteFile(content);
+      if (parsed) siteFiles.push(parsed);
+    }
+  }
+
+  if (siteFiles.length > 0) {
+    const workspace = mergeWorkspaceFromSiteFiles(siteFiles);
+    await setWorkspace(workspace);
+  }
+
+  if (configJson) {
+    const config = parseConfigPayload(configJson);
+    if (config) {
+      await setMeta(config.meta);
+      if (config.locale) setLocale(config.locale);
+    }
+  }
+
+  const nextStateFiles: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(index.files ?? {})) {
+    nextStateFiles[key] = entry.hash;
+  }
+  await saveSyncState({ files: nextStateFiles, lastSyncedAt: Date.now() });
+
+  return { downloaded, applied: true };
+}

@@ -14,7 +14,8 @@ npm install
 | `npm test` | 运行 Vitest（jsdom 环境，watch 模式） |
 | `npm test -- --run` | 单次运行全部测试 |
 | `npm run lint` | ESLint 检查 |
-| `npm run build` | 完整构建扩展（见下文） |
+| `npm run build` | 完整构建扩展（见下文，默认不自增版本号） |
+| `npm run build:release` | 自增 patch 版本号后构建（发布用） |
 | `npm run preview` | 预览构建产物 |
 
 ## 构建流程
@@ -22,15 +23,20 @@ npm install
 `npm run build` 依次执行：
 
 ```
-node scripts/bump-version.cjs   # 自增 patch 版本号
-&& tsc -b                       # 类型检查
-&& vite build                   # 构建侧边栏 UI → dist/
+tsc -b                       # 类型检查
+&& vite build                # 构建侧边栏 UI → dist/
 && vite build --config vite.extension.config.ts  # 构建 service worker → dist/background.js
 ```
 
 ### 版本号自增
 
-`scripts/bump-version.cjs` 在每次构建开始时把 patch 版本号 +1，并同步写回 `package.json` 与 `public/manifest.json`，保证两者始终一致。
+默认构建**不会**修改版本号。需要发布新版本时，任选其一：
+
+- `npm run build:release` — 自增 patch 后构建
+- `npm run build -- --bump-version`（或 `-b`）— 带参数构建
+- `BUMP_VERSION=1 npm run build` — 通过环境变量开启
+
+`scripts/bump-version.cjs` 会把 patch 版本号 +1，并同步写回 `package.json` 与 `public/manifest.json`，保证两者始终一致。
 
 ### 两套 Vite 配置
 

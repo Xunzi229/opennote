@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/bump-version.cjs && tsc -b && vite build && vite build --config vite.extension.config.ts",
+    "build": "node scripts/build.cjs",
+    "build:release": "node scripts/build.cjs --bump-version",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest"

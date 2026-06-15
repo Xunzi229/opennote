@@ -7,6 +7,7 @@ import { getNoteStats, formatRelativeTime } from '../lib/noteStats';
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronRight,
   Copy,
   CopyPlus,
   ExternalLink,
@@ -26,7 +27,13 @@ import { t } from '../i18n';
 import { pushToWebdav, pullIncremental } from '../services/webdavSync';
 import { isWebdavConfigured, loadWebdavConfig } from '../lib/syncConfig';
 
-export default function EditorPanel() {
+export default function EditorPanel({
+  showWorkspace = true,
+  onShowWorkspace,
+}: {
+  showWorkspace?: boolean;
+  onShowWorkspace?: () => void;
+}) {
   const {
     selectedPageId,
     setSelectedPageId,
@@ -219,6 +226,19 @@ export default function EditorPanel() {
   if (!selectedPage) {
     return (
       <main className="panel panel-editor editor-panel">
+        {!showWorkspace && onShowWorkspace && (
+          <div className="editor-workspace-toggle-bar">
+            <button
+              type="button"
+              onClick={onShowWorkspace}
+              className="btn btn-ghost btn-icon"
+              title={t('showWorkspace')}
+              aria-label={t('showWorkspace')}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         <div className="empty-state h-full flex flex-col items-center justify-center">
           <FileText className="empty-state-icon" />
           <p className="text-[14px] font-medium text-[var(--color-text)]">{t('selectOrCreatePage')}</p>
@@ -241,7 +261,19 @@ export default function EditorPanel() {
   return (
     <main className="panel panel-editor editor-panel">
       <header className="editor-page-header">
-        <div className="editor-breadcrumb" data-testid="editor-breadcrumb">
+        <div className="editor-header-top">
+          {!showWorkspace && onShowWorkspace && (
+            <button
+              type="button"
+              onClick={onShowWorkspace}
+              className="btn btn-ghost btn-icon workspace-panel-toggle"
+              title={t('showWorkspace')}
+              aria-label={t('showWorkspace')}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+          <div className="editor-breadcrumb" data-testid="editor-breadcrumb">
           <span className="breadcrumb-site">{selectedPage.site}</span>
           <span className="breadcrumb-separator">/</span>
           <span className="breadcrumb-page">{sourceTitle}</span>
@@ -256,6 +288,7 @@ export default function EditorPanel() {
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           )}
+        </div>
         </div>
 
         <div className="editor-title-row">

@@ -1,5 +1,4 @@
 ﻿import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { useNotesStore } from './store/notesStore';
 import { useSyncSiteWithActiveTab } from './hooks/useSyncSiteWithActiveTab';
@@ -67,7 +66,7 @@ function App() {
         <div className="panel-group">
           {canLoadPanels ? (
             <Suspense fallback={<WorkspacePanelFallback />}>
-              <Sidebar />
+              <Sidebar onHideWorkspace={() => setShowSidebar(false)} />
             </Suspense>
           ) : (
             <WorkspacePanelFallback />
@@ -83,31 +82,15 @@ function App() {
             onPointerCancel={handleResizeEnd}
             onDoubleClick={() => persistSidebarWidth(DEFAULT_SIDEBAR_WIDTH)}
           />
-          <button
-            type="button"
-            onClick={() => setShowSidebar(false)}
-            className="panel-rail"
-            title={t('hideWorkspace')}
-            aria-label={t('hideWorkspace')}
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setShowSidebar(true)}
-          className="panel-rail"
-          title={t('showWorkspace')}
-          aria-label={t('showWorkspace')}
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      )}
+      ) : null}
 
       {canLoadPanels ? (
         <Suspense fallback={<EditorPanelFallback />}>
-          <EditorPanel />
+          <EditorPanel
+            showWorkspace={showSidebar}
+            onShowWorkspace={() => setShowSidebar(true)}
+          />
         </Suspense>
       ) : (
         <EditorPanelFallback />

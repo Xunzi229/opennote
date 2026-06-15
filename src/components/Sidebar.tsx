@@ -5,6 +5,7 @@ import ConfirmDialog from './ConfirmDialog';
 import {
   ArrowUpDown,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   FileText,
   Filter,
@@ -52,7 +53,7 @@ const DEFAULT_QUICK_SECTION_PREFS: QuickSectionPreferences = {
   pinnedSectionCollapsed: false,
 };
 
-export default function Sidebar() {
+export default function Sidebar({ onHideWorkspace }: { onHideWorkspace?: () => void }) {
   const {
     workspace,
     searchQuery,
@@ -375,6 +376,17 @@ export default function Sidebar() {
               aria-label={t('locateCurrentSite', { site: actualCurrentSite })}
             >
               <Globe2 className="w-4 h-4" />
+            </button>
+          )}
+          {onHideWorkspace && (
+            <button
+              type="button"
+              onClick={onHideWorkspace}
+              className="btn btn-ghost btn-icon"
+              title={t('hideWorkspace')}
+              aria-label={t('hideWorkspace')}
+            >
+              <ChevronLeft className="w-4 h-4" />
             </button>
           )}
         </div>

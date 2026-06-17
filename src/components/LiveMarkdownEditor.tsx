@@ -22,7 +22,7 @@ export interface LiveMarkdownEditorHandle {
   insert: (type: MarkdownInsertType, options?: { rows?: number; cols?: number }) => void;
 }
 
-function openClickedLink(event: Event, root: HTMLElement) {
+function openDoubleClickedLink(event: Event, root: HTMLElement) {
   if (!(event instanceof MouseEvent) || event.button !== 0) return false;
 
   const target = event.target;
@@ -137,7 +137,7 @@ const LiveMarkdownEditor = forwardRef<LiveMarkdownEditorHandle, LiveMarkdownEdit
             class: 'markdown-preview focus:outline-none p-5 min-h-full text-left',
           },
           handleDOMEvents: {
-            click: (view, event) => openClickedLink(event, view.dom),
+            dblclick: (view, event) => openDoubleClickedLink(event, view.dom),
           },
         },
       },

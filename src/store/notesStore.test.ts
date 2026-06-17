@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useNotesStore } from './notesStore';
-import { addPage, createEmptyWorkspace, getWorkspace, setWorkspace, siteRootId } from '../lib/storage';
+import { addPage, createEmptyWorkspace, getWorkspace, setMeta, setWorkspace, siteRootId } from '../lib/storage';
 import type { WorkspaceStore } from '../types';
 
 const mockStorage: Record<string, unknown> = {};
@@ -68,6 +68,24 @@ describe('workspace store', () => {
 
     expect(useNotesStore.getState().currentSite).toBe('example.com');
     expect(useNotesStore.getState().selectedPageId).toBe('page-1');
+  });
+
+  it('restores the last selected page when the workspace loads again', async () => {
+    const workspace: WorkspaceStore = {
+      rootIds: ['site:example.com'],
+      pages: {
+        'site:example.com': page('site:example.com', 'site', 'example.com', null, 'example.com', 0),
+        previous: page('previous', 'page', 'example.com', 'site:example.com', 'Previous page', 0),
+      },
+    };
+    await setWorkspace(workspace);
+    await setMeta({ lastActiveSite: null, version: 2, lastSelectedPageId: 'previous' });
+
+    await useNotesStore.getState().loadWorkspace();
+
+    expect(useNotesStore.getState().selectedPageId).toBe('previous');
+    expect(useNotesStore.getState().selectedNoteId).toBe('previous');
+    expect(useNotesStore.getState().currentSite).toBe('example.com');
   });
 
   it('ensures a fixed site root', async () => {

@@ -3,6 +3,50 @@ import { describe, expect, it, vi } from 'vitest';
 import LiveMarkdownEditor from './LiveMarkdownEditor';
 
 describe('LiveMarkdownEditor links', () => {
+  it('does not auto-link plain email addresses after formatting is cleared', async () => {
+    render(
+      <LiveMarkdownEditor
+        content="Contact yap-45-grungy+sss5@icloud.com"
+        noteId="page-email"
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: 'yap-45-grungy+sss5@icloud.com' })).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('Contact yap-45-grungy+sss5@icloud.com')).toBeInTheDocument();
+  });
+
+  it('renders auto-generated mailto markdown for an email as plain text', async () => {
+    render(
+      <LiveMarkdownEditor
+        content="Contact [yap-45-grungy+sss5@icloud.com](mailto:yap-45-grungy+sss5@icloud.com)"
+        noteId="page-mailto"
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: 'yap-45-grungy+sss5@icloud.com' })).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('Contact yap-45-grungy+sss5@icloud.com')).toBeInTheDocument();
+  });
+
+  it('keeps intentional mailto links with custom text', async () => {
+    render(
+      <LiveMarkdownEditor
+        content="Contact [Email me](mailto:yap-45-grungy+sss5@icloud.com)"
+        noteId="page-intentional-mailto"
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    const link = await screen.findByRole('link', { name: 'Email me' });
+
+    expect(link).toHaveAttribute('href', 'mailto:yap-45-grungy+sss5@icloud.com');
+  });
+
   it('turns a plain URL into a link that opens only on double click', async () => {
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
 

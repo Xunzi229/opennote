@@ -16,8 +16,10 @@ import {
   deleteSite as storageDeleteSite,
   ensureSiteRoot as storageEnsureSiteRoot,
   getWorkspace,
+  getMeta,
   movePage as storageMovePage,
   onWorkspaceChange,
+  setMeta,
   siteRootId,
   updatePageContent as storageUpdatePageContent,
   updatePageMeta as storageUpdatePageMeta,
@@ -96,8 +98,20 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   loadWorkspace: async () => {
     set({ isLoading: true, error: null });
     try {
-      const workspace = await getWorkspace();
-      set({ workspace, isLoading: false });
+      const [workspace, meta] = await Promise.all([getWorkspace(), getMeta()]);
+      const currentSelected = get().selectedPageId;
+      const restoredSelected =
+        (currentSelected && workspace.pages[currentSelected]?.id) ||
+        (meta.lastSelectedPageId && workspace.pages[meta.lastSelectedPageId]?.id) ||
+        null;
+      const restoredPage = restoredSelected ? workspace.pages[restoredSelected] : null;
+      set({
+        workspace,
+        currentSite: restoredPage?.site ?? get().currentSite,
+        selectedPageId: restoredSelected,
+        selectedNoteId: restoredSelected,
+        isLoading: false,
+      });
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to load workspace',
@@ -116,6 +130,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   setSelectedPageId: (id) => {
     if (get().selectedPageId === id) return;
     set({ selectedPageId: id, selectedNoteId: id });
+    void persistLastSelectedPageId(id);
   },
 
   setSelectedNoteId: (id) => get().setSelectedPageId(id),
@@ -127,6 +142,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       selectedPageId: pageId,
       selectedNoteId: pageId,
     });
+    void persistLastSelectedPageId(pageId);
   },
 
   selectNote: (_site, pageId) => get().selectPage(pageId),
@@ -162,6 +178,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
         selectedPageId: page.id,
         selectedNoteId: page.id,
       });
+      void persistLastSelectedPageId(page.id);
       return page;
     } catch (err) {
       handleStoreError(err, 'Failed to add page');
@@ -205,6 +222,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
         selectedPageId: nextSelected,
         selectedNoteId: nextSelected,
       });
+      void persistLastSelectedPageId(nextSelected);
     } catch (err) {
       handleStoreError(err, 'Failed to delete page');
       throw err;
@@ -271,6 +289,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       selectedPageId: page?.id ?? get().selectedPageId,
       selectedNoteId: page?.id ?? get().selectedNoteId,
     });
+    void persistLastSelectedPageId(page?.id ?? get().selectedPageId);
   },
 
   deleteSite: async (site) => {
@@ -283,6 +302,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
       selectedPageId: nextSelected,
       selectedNoteId: nextSelected,
     });
+    void persistLastSelectedPageId(nextSelected);
   },
 
   setSearchQuery: (query) => {
@@ -448,6 +468,15 @@ function handleStoreError(error: unknown, fallback: string) {
     toast.error(t('storageQuotaExceeded'));
   } else {
     useNotesStore.setState({ error: message });
+  }
+}
+
+async function persistLastSelectedPageId(pageId: string | null): Promise<void> {
+  try {
+    const meta = await getMeta();
+    await setMeta({ ...meta, lastSelectedPageId: pageId });
+  } catch {
+    // Selection persistence is a convenience; editing should continue if it fails.
   }
 }
 

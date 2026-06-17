@@ -33,6 +33,7 @@ export interface WorkspaceStore {
 
 export interface MetaStore {
   lastActiveSite: string | null;
+  lastSelectedPageId?: string | null;
   version: number;
   showSidebar?: boolean;
   showNoteList?: boolean;

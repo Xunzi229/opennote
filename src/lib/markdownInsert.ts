@@ -4,7 +4,9 @@ import { buildTableMarkdown } from './tableUtils';
 
 export type { MarkdownInsertType } from './markdownInsertTypes';
 
-const SNIPPETS: Record<MarkdownInsertType, string> = {
+type MarkdownSnippetType = Exclude<MarkdownInsertType, 'clearFormat'>;
+
+const SNIPPETS: Record<MarkdownSnippetType, string> = {
   heading2: '## 标题\n',
   heading3: '### 标题\n',
   bold: '**粗体**',
@@ -18,12 +20,12 @@ const SNIPPETS: Record<MarkdownInsertType, string> = {
   divider: '\n---\n',
 };
 
-const WRAP: Partial<Record<MarkdownInsertType, { before: string; after: string; placeholder: string }>> = {
+const WRAP: Partial<Record<MarkdownSnippetType, { before: string; after: string; placeholder: string }>> = {
   bold: { before: '**', after: '**', placeholder: '粗体' },
   italic: { before: '*', after: '*', placeholder: '斜体' },
 };
 
-const SELECT_RANGE: Partial<Record<MarkdownInsertType, { start: number; end: number }>> = {
+const SELECT_RANGE: Partial<Record<MarkdownSnippetType, { start: number; end: number }>> = {
   heading2: { start: 3, end: 5 },
   heading3: { start: 4, end: 6 },
   bulletList: { start: 2, end: 5 },
@@ -51,11 +53,57 @@ export function insertAtCursor(
   view.focus();
 }
 
+export function clearMarkdownFormatting(markdown: string): string {
+  return markdown
+    .replace(/^```[^\n]*\n?/gm, '')
+    .replace(/^~~~[^\n]*\n?/gm, '')
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/^\s{0,3}#{1,6}\s+/, '')
+        .replace(/^\s{0,3}>\s?/, '')
+        .replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/, '')
+        .replace(/^\s{0,3}\[[ xX]\]\s+/, ''),
+    )
+    .join('\n')
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/__([^_\n]+)__/g, '$1')
+    .replace(/~~([^~\n]+)~~/g, '$1')
+    .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1$2')
+    .replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1$2');
+}
+
+export function clearSelectedMarkdownFormatting(view: EditorView) {
+  const { from, to } = view.state.selection.main;
+
+  if (from === to) {
+    view.focus();
+    return;
+  }
+
+  const selected = view.state.sliceDoc(from, to);
+  const cleared = clearMarkdownFormatting(selected);
+
+  view.dispatch({
+    changes: { from, to, insert: cleared },
+    selection: { anchor: from, head: from + cleared.length },
+  });
+  view.focus();
+}
+
 export function insertTableMarkdown(view: EditorView, rows: number, cols: number) {
   insertAtCursor(view, buildTableMarkdown(rows, cols));
 }
 
 export function insertMarkdownSnippet(view: EditorView, type: MarkdownInsertType) {
+  if (type === 'clearFormat') {
+    clearSelectedMarkdownFormatting(view);
+    return;
+  }
+
   const wrap = WRAP[type];
   const { from, to } = view.state.selection.main;
   const selected = view.state.sliceDoc(from, to);

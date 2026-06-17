@@ -7,6 +7,7 @@ import {
   ListOrdered,
   Quote,
   Code,
+  Eraser,
   Link2,
   Minus,
 } from 'lucide-react';
@@ -28,6 +29,7 @@ const TOOLBAR_ITEMS: {
   { type: 'heading3', labelKey: 'toolbarHeading3', icon: Heading3 },
   { type: 'bold', labelKey: 'toolbarBold', icon: Bold },
   { type: 'italic', labelKey: 'toolbarItalic', icon: Italic },
+  { type: 'clearFormat', labelKey: 'toolbarClearFormat', icon: Eraser },
   { type: 'bulletList', labelKey: 'toolbarBulletList', icon: List },
   { type: 'orderedList', labelKey: 'toolbarOrderedList', icon: ListOrdered },
   { type: 'blockquote', labelKey: 'toolbarBlockquote', icon: Quote },
@@ -48,7 +50,7 @@ export default function MarkdownToolbar({ onInsert, onInsertTable }: MarkdownToo
       </div>
 
       <div className="toolbar-group">
-        {TOOLBAR_ITEMS.slice(2, 4).map(({ type, labelKey, icon: Icon }) => (
+        {TOOLBAR_ITEMS.slice(2, 5).map(({ type, labelKey, icon: Icon }) => (
           <button key={type} type="button" title={t(labelKey)} onClick={() => onInsert(type)} className="toolbar-button">
             <Icon className="w-4 h-4" />
           </button>
@@ -56,7 +58,7 @@ export default function MarkdownToolbar({ onInsert, onInsertTable }: MarkdownToo
       </div>
 
       <div className="toolbar-group">
-        {TOOLBAR_ITEMS.slice(4, 8).map(({ type, labelKey, icon: Icon }) => (
+        {TOOLBAR_ITEMS.slice(5, 9).map(({ type, labelKey, icon: Icon }) => (
           <button key={type} type="button" title={t(labelKey)} onClick={() => onInsert(type)} className="toolbar-button">
             <Icon className="w-4 h-4" />
           </button>
@@ -65,7 +67,7 @@ export default function MarkdownToolbar({ onInsert, onInsertTable }: MarkdownToo
 
       <div className="toolbar-group">
         <TableGridPicker onSelect={onInsertTable} />
-        {TOOLBAR_ITEMS.slice(8).map(({ type, labelKey, icon: Icon }) => (
+        {TOOLBAR_ITEMS.slice(9).map(({ type, labelKey, icon: Icon }) => (
           <button key={type} type="button" title={t(labelKey)} onClick={() => onInsert(type)} className="toolbar-button">
             <Icon className="w-4 h-4" />
           </button>

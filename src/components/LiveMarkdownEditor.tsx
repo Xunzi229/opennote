@@ -89,6 +89,9 @@ function applyInsert(
     case 'divider':
       chain.setHorizontalRule().run();
       return;
+    case 'clearFormat':
+      chain.unsetAllMarks().clearNodes().run();
+      return;
   }
 }
 

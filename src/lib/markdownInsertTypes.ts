@@ -9,4 +9,5 @@ export type MarkdownInsertType =
   | 'codeBlock'
   | 'link'
   | 'table'
-  | 'divider';
+  | 'divider'
+  | 'clearFormat';

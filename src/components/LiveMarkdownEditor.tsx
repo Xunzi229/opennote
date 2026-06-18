@@ -25,8 +25,8 @@ export interface LiveMarkdownEditorHandle {
   insert: (type: MarkdownInsertType, options?: { rows?: number; cols?: number }) => void;
 }
 
-function openDoubleClickedLink(event: Event, root: HTMLElement) {
-  if (!(event instanceof MouseEvent) || event.button !== 0) return false;
+function openLinkFromEvent(event: MouseEvent, root: HTMLElement) {
+  if (event.button !== 0) return false;
 
   const target = event.target;
   const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
@@ -37,6 +37,16 @@ function openDoubleClickedLink(event: Event, root: HTMLElement) {
   event.preventDefault();
   window.open(link.href, link.target || '_blank');
   return true;
+}
+
+function openModifiedClickedLink(event: Event, root: HTMLElement) {
+  if (!(event instanceof MouseEvent) || !event.ctrlKey) return false;
+  return openLinkFromEvent(event, root);
+}
+
+function openDoubleClickedLink(event: Event, root: HTMLElement) {
+  if (!(event instanceof MouseEvent)) return false;
+  return openLinkFromEvent(event, root);
 }
 
 function shouldAutoLink(value: string) {
@@ -209,6 +219,7 @@ const LiveMarkdownEditor = forwardRef<LiveMarkdownEditorHandle, LiveMarkdownEdit
             class: 'markdown-preview focus:outline-none p-5 min-h-full text-left',
           },
           handleDOMEvents: {
+            click: (view, event) => openModifiedClickedLink(event, view.dom),
             dblclick: (view, event) => openDoubleClickedLink(event, view.dom),
           },
         },
